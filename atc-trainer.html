@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATC Trainer</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --green: #00ff88;
+    --blue:  #00aaff;
+    --amber: #ffcc00;
+    --red:   #ff4444;
+    --bg:    #050510;
+    --panel: #0d0d1a;
+    --border:#1e2040;
+    --text:  #d0d8e8;
+    --dim:   #556070;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    height: 100vh;
+    overflow: hidden;
+    font-size: 13px;
+}
+
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ── Header ──────────────────────────────────────────── */
+#header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #08080f;
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    height: 48px;
+    flex-shrink: 0;
+}
+
+#title {
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    color: var(--green);
+    text-shadow: 0 0 8px var(--green);
+}
+
+#controls { display: flex; align-items: center; gap: 10px; }
+
+#controls select,
+#controls button {
+    background: #111122;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    transition: border-color .15s;
+}
+#controls select:hover,
+#controls button:hover:not(:disabled) { border-color: var(--green); }
+#controls button:disabled { opacity: .4; cursor: default; }
+
+#timer { color: var(--green); font-size: 15px; font-weight: bold; min-width: 48px; }
+#score-display { color: var(--amber); min-width: 80px; }
+
+/* ── Main layout ─────────────────────────────────────── */
+#main { display: flex; flex: 1; overflow: hidden; }
+
+#map-canvas {
+    flex: 1;
+    display: block;
+    cursor: crosshair;
+    background: var(--bg);
+}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+#sidebar {
+    width: 290px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.panel-title {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dim);
+    padding: 7px 10px 5px;
+    border-bottom: 1px solid var(--border);
+    background: #0a0a18;
+}
+
+/* ── Flight strips ───────────────────────────────────── */
+#strips-panel { flex: 1; overflow-y: auto; min-height: 0; }
+#strips { padding: 4px 6px; }
+
+.strip {
+    background: #0e1028;
+    border: 1px solid #1a1e40;
+    border-left: 3px solid var(--green);
+    margin: 4px 0;
+    padding: 5px 8px;
+    cursor: pointer;
+    transition: background .15s, border-left-color .15s;
+}
+.strip:hover, .strip.selected {
+    background: #141830;
+    border-left-color: var(--blue);
+}
+.strip .cs { color: var(--green); font-size: 13px; font-weight: bold; margin-bottom: 2px; }
+.strip .cs.selected { color: var(--blue); }
+.strip .det { color: #8898aa; font-size: 10px; line-height: 1.5; }
+
+/* ── Comms panel ─────────────────────────────────────── */
+#comms-panel { border-top: 1px solid var(--border); padding-bottom: 8px; }
+
+#ptt-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px 4px; }
+
+#btn-ptt {
+    flex: 1;
+    background: #111122;
+    border: 2px solid #333;
+    color: var(--text);
+    padding: 6px 10px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    transition: background .1s, border-color .1s, color .1s;
+}
+#btn-ptt:hover { border-color: var(--green); }
+#btn-ptt.active {
+    background: #2a0000;
+    border-color: var(--red);
+    color: #ff9999;
+}
+
+#voice-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: #333;
+    flex-shrink: 0;
+}
+#voice-dot.on {
+    background: var(--red);
+    box-shadow: 0 0 5px var(--red);
+    animation: blink .8s infinite;
+}
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+#transcript-display {
+    padding: 2px 10px;
+    min-height: 18px;
+    font-size: 11px;
+    color: #8898aa;
+    font-style: italic;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+#readback-display {
+    padding: 3px 10px;
+    min-height: 20px;
+    font-size: 12px;
+    color: var(--blue);
+    font-weight: bold;
+}
+#hint-display {
+    margin: 4px 10px;
+    padding: 4px 8px;
+    background: #1a1000;
+    border-left: 3px solid var(--amber);
+    font-size: 11px;
+    color: var(--amber);
+    min-height: 0;
+    display: none;
+}
+#hint-display.visible { display: block; }
+
+#text-input-row { display: flex; gap: 4px; padding: 4px 10px; }
+#text-cmd {
+    flex: 1;
+    background: #111122;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 6px;
+    font-family: inherit;
+    font-size: 11px;
+}
+#text-cmd:focus { outline: none; border-color: var(--green); }
+#btn-send {
+    background: #111122;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+}
+#btn-send:hover { border-color: var(--green); }
+
+/* ── Log ─────────────────────────────────────────────── */
+#log-panel {
+    border-top: 1px solid var(--border);
+    height: 150px;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+#log { flex: 1; overflow-y: auto; padding: 3px 8px; }
+.log-entry { font-size: 10px; padding: 1px 0; line-height: 1.5; }
+.log-entry .ts { color: #444; margin-right: 5px; }
+.log-entry.ctrl  { color: var(--green); }
+.log-entry.ac    { color: var(--blue); }
+.log-entry.sys   { color: var(--amber); }
+.log-entry.warn  { color: var(--red); }
+
+/* ── Score modal ─────────────────────────────────────── */
+#score-modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.88);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200;
+}
+#score-modal.hidden { display: none; }
+
+#score-content {
+    background: #0d0d1a;
+    border: 1px solid #333;
+    padding: 32px 36px;
+    min-width: 420px;
+    max-width: 560px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+#score-content h2 {
+    color: var(--green);
+    letter-spacing: 4px;
+    text-align: center;
+    margin-bottom: 24px;
+    font-size: 18px;
+}
+.srow {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #1a1a2e;
+    font-size: 13px;
+}
+.srow .lbl { color: #8898aa; }
+.srow .val { color: var(--amber); font-weight: bold; }
+.srow.good .val { color: var(--green); }
+.srow.bad  .val { color: var(--red); }
+
+.score-section-title {
+    margin-top: 16px;
+    margin-bottom: 4px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+
+#btn-close-score {
+    display: block;
+    margin: 24px auto 0;
+    background: #111122;
+    border: 1px solid #333;
+    color: var(--text);
+    padding: 8px 28px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+}
+#btn-close-score:hover { border-color: var(--green); }
+
+/* ── Scrollbar (subtle) ──────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <span id="title">✈ ATC TRAINER</span>
+    <div id="controls">
+      <select id="level-select">
+        <option value="1">Level 1 — Introduction</option>
+        <option value="2">Level 2 — Rush Hour</option>
+      </select>
+      <button id="btn-start">▶ Start</button>
+      <button id="btn-pause" disabled>⏸ Pause</button>
+      <div id="timer">00:00</div>
+      <div id="score-display">Score: 0</div>
+    </div>
+  </div>
+  <div id="main">
+    <canvas id="map-canvas"></canvas>
+    <div id="sidebar">
+      <div id="strips-panel">
+        <div class="panel-title">Flight Strips</div>
+        <div id="strips"></div>
+      </div>
+      <div id="comms-panel">
+        <div class="panel-title">Communications</div>
+        <div id="ptt-row">
+          <button id="btn-ptt">🎤 Push to Talk (Space)</button>
+          <div id="voice-dot"></div>
+        </div>
+        <div id="transcript-display"></div>
+        <div id="readback-display"></div>
+        <div id="hint-display"></div>
+        <div id="text-input-row">
+          <input id="text-cmd" type="text" placeholder="Type command (fallback)…" autocomplete="off">
+          <button id="btn-send">Send</button>
+        </div>
+      </div>
+      <div id="log-panel">
+        <div class="panel-title">ATC Log</div>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="score-modal" class="hidden">
+  <div id="score-content">
+    <h2>SESSION COMPLETE</h2>
+    <div id="score-breakdown"></div>
+    <button id="btn-close-score">Close</button>
+  </div>
+</div>
+<script>
+/**
+ * ATC phraseology parser.
+ * Converts raw speech transcript into a structured command:
+ *   { callsign, instruction: { type, altitude|heading|speed|waypoint, display } }
+ */
+
+const PHONETIC = {
+    alpha:'A', bravo:'B', charlie:'C', delta:'D', echo:'E',
+    foxtrot:'F', golf:'G', hotel:'H', india:'I', juliet:'J',
+    kilo:'K', lima:'L', mike:'M', november:'N', oscar:'O',
+    papa:'P', quebec:'Q', romeo:'R', sierra:'S', tango:'T',
+    uniform:'U', victor:'V', whiskey:'W', xray:'X', 'x-ray':'X',
+    yankee:'Y', zulu:'Z',
+};
+
+const DIGIT_WORDS = {
+    zero:'0', one:'1', two:'2', three:'3', four:'4',
+    five:'5', six:'6', seven:'7', eight:'8', niner:'9', nine:'9',
+};
+
+function phoneticToLetters(words) {
+    let result = '';
+    for (const w of words) {
+        if (PHONETIC[w]) result += PHONETIC[w];
+        else if (DIGIT_WORDS[w]) result += DIGIT_WORDS[w];
+        else break;
+    }
+    return result;
+}
+
+function wordsToNumber(str) {
+    const parts = str.trim().toLowerCase().split(/\s+/);
+    let digits = '';
+    let thousands = 0;
+    let hundreds = 0;
+
+    for (const w of parts) {
+        if (DIGIT_WORDS[w]) {
+            digits += DIGIT_WORDS[w];
+        } else if (w === 'thousand' || w === 'thousands') {
+            if (digits) { thousands = parseInt(digits, 10) * 1000; digits = ''; }
+        } else if (w === 'hundred' || w === 'hundreds') {
+            if (digits) { hundreds = parseInt(digits, 10) * 100; digits = ''; }
+        }
+        // ignore unrecognised words (prepositions, etc.)
+    }
+
+    const remainder = digits ? parseInt(digits, 10) : 0;
+    const total = thousands + hundreds + remainder;
+    return total > 0 ? total : (digits ? parseInt(digits, 10) : null);
+}
+
+// ── Instruction parser ────────────────────────────────────────────────────────
+
+function parseInstruction(text) {
+    const t = text.toLowerCase();
+
+    // Climb / Descend ─────────────────────────────────────────────────────────
+    const isClimb   = /\bclimb\b|\bclimbing\b/.test(t);
+    const isDescend = /\bdescend\b|\bdescending\b/.test(t);
+
+    if (isClimb || isDescend) {
+        const alt = extractAltitude(t);
+        if (alt !== null) {
+            const type = isClimb ? 'climb' : 'descend';
+            return { type, altitude: alt.feet, display: alt.label };
+        }
+    }
+
+    // Maintain altitude ───────────────────────────────────────────────────────
+    if (/\bmaintain\b/.test(t) && !/\bspeed\b|\bknots\b|\bkt\b/.test(t)) {
+        const alt = extractAltitude(t);
+        if (alt !== null) return { type: 'maintain_alt', altitude: alt.feet, display: `Maintain ${alt.label}` };
+    }
+
+    // Heading ─────────────────────────────────────────────────────────────────
+    const hdgMatch = t.match(/heading\s+([\w\s]+?)(?:$|,|\.|contact|speed|squawk)/);
+    if (hdgMatch) {
+        const hdg = wordsToNumber(hdgMatch[1].trim());
+        if (hdg !== null) {
+            const dir = /\bturn left\b/.test(t) ? 'left' : /\bturn right\b/.test(t) ? 'right' : null;
+            return { type: 'heading', heading: hdg, direction: dir, display: `Heading ${String(hdg).padStart(3,'0')}` };
+        }
+    }
+
+    // Direct to waypoint ──────────────────────────────────────────────────────
+    const dirMatch = t.match(/direct(?:ly)?\s+(?:to\s+)?([a-z]{2,5})\b/);
+    if (dirMatch) {
+        const wp = dirMatch[1].toUpperCase();
+        return { type: 'direct', waypoint: wp, display: `Direct ${wp}` };
+    }
+
+    // Speed ───────────────────────────────────────────────────────────────────
+    const spdMatch = t.match(/(?:maintain|reduce|increase|speed)\s+([\w\s]+?)\s*(?:knots|kts|kt)\b/);
+    if (spdMatch) {
+        const spd = wordsToNumber(spdMatch[1]);
+        if (spd !== null) return { type: 'speed', speed: spd, display: `Speed ${spd} kt` };
+    }
+
+    // Contact ─────────────────────────────────────────────────────────────────
+    const ctMatch = t.match(/contact\s+(\w+)/);
+    if (ctMatch) return { type: 'contact', who: ctMatch[1], display: `Contact ${ctMatch[1]}` };
+
+    // Cleared to land ─────────────────────────────────────────────────────────
+    if (/clear(?:ed)? (?:to )?land/.test(t)) {
+        const rwMatch = t.match(/runway\s+([\w\s]+)/);
+        return { type: 'land', runway: rwMatch ? rwMatch[1].trim() : null, display: 'Cleared to land' };
+    }
+
+    // Cleared for takeoff ─────────────────────────────────────────────────────
+    if (/clear(?:ed)?.*take.?off/.test(t)) {
+        return { type: 'takeoff', display: 'Cleared for takeoff' };
+    }
+
+    return { type: 'unknown', display: '(unrecognised instruction)' };
+}
+
+function extractAltitude(t) {
+    // Flight level  e.g. "flight level three five zero"
+    const flMatch = t.match(/flight level\s+([\w\s]+?)(?:$|,|\.|contact|speed)/);
+    if (flMatch) {
+        const fl = wordsToNumber(flMatch[1].trim());
+        if (fl !== null) return { feet: fl * 100, label: `FL${fl}` };
+    }
+
+    // "... feet / foot / ft"
+    const ftMatch = t.match(/([\w\s]+?)\s*(?:feet|foot|ft)\b/);
+    if (ftMatch) {
+        const alt = wordsToNumber(ftMatch[1].trim());
+        if (alt !== null) return { feet: alt, label: `${alt} ft` };
+    }
+
+    // "two thousand" style — no unit word
+    const tMatch = t.match(/([\w\s]*\bthousand[\w\s]*)/);
+    if (tMatch) {
+        const alt = wordsToNumber(tMatch[1].trim());
+        if (alt !== null) return { feet: alt, label: `${alt} ft` };
+    }
+
+    return null;
+}
+
+// ── Callsign matcher ──────────────────────────────────────────────────────────
+
+function matchCallsign(words, knownCallsigns) {
+    // 1. Try exact phonetic phrase match for each known aircraft
+    for (const ac of knownCallsigns) {
+        const phoneticWords = ac.phonetic.toLowerCase().split(/\s+/);
+        const matched = phoneticWords.length > 0 &&
+            phoneticWords.every((pw, i) => words[i] === pw);
+        if (matched) return { callsign: ac.callsign, consumed: phoneticWords.length };
+    }
+
+    // 2. Build callsign letter-by-letter from ICAO phonetics
+    const built = phoneticToLetters(words);
+    if (built.length >= 2) {
+        for (const ac of knownCallsigns) {
+            if (ac.callsign === built || ac.callsign.startsWith(built)) {
+                return { callsign: ac.callsign, consumed: built.length };
+            }
+        }
+        // Partial: up to 8 phonetic words attempted
+        const attempt = phoneticToLetters(words.slice(0, 8));
+        if (attempt.length >= 2) {
+            for (const ac of knownCallsigns) {
+                if (ac.callsign.startsWith(attempt)) {
+                    return { callsign: ac.callsign, consumed: attempt.length };
+                }
+            }
+        }
+    }
+
+    return null;
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+function parseATCCommand(transcript, knownCallsigns) {
+    // Strip commas, periods, and other punctuation that speech recognition adds
+    const cleaned = transcript.toLowerCase().trim().replace(/[,.\-!?;:]/g, '');
+    const words   = cleaned.split(/\s+/).filter(Boolean);
+
+    const match = matchCallsign(words, knownCallsigns);
+    if (!match) {
+        return { error: `Could not identify callsign in: "${transcript}"`, raw: transcript };
+    }
+
+    const { callsign, consumed } = match;
+    const instructionText = words.slice(consumed).join(' ');
+    const instruction = parseInstruction(instructionText);
+
+    return { callsign, instruction, raw: transcript };
+}
+
+// Expose for testing
+{ wordsToNumber, phoneticToLetters };
+
+
+// ─────────────────────────────────────────────────────────────────
+
+class Plane {
+    constructor(cfg) {
+        this.callsign     = cfg.callsign;
+        this.phonetic     = cfg.phonetic;
+        this.lat          = cfg.lat;
+        this.lon          = cfg.lon;
+        this.altitude     = cfg.altitude;
+        this.targetAlt    = cfg.altitude;
+        this.speed        = cfg.speed;        // knots
+        this.heading      = cfg.heading;      // degrees true
+        this.targetHdg    = cfg.heading;
+        this.route        = [...(cfg.route || [])];
+        this.wpIndex      = 0;
+        this.color        = cfg.color || '#00ff88';
+        this.selected     = false;
+        this.status       = 'enroute';        // enroute | exited
+        this.trail        = [];
+        this.TRAIL_LEN    = 25;
+    }
+
+    // dt: seconds since last frame
+    update(dt, waypoints) {
+        if (this.status === 'exited') return;
+
+        // Smoothly turn toward target heading (max 3°/s)
+        const rawDiff  = ((this.targetHdg - this.heading + 540) % 360) - 180;
+        const maxTurn  = 3 * dt;
+        this.heading += Math.abs(rawDiff) < maxTurn
+            ? rawDiff
+            : Math.sign(rawDiff) * maxTurn;
+        this.heading = (this.heading + 360) % 360;
+
+        // Smoothly change altitude (1500 fpm)
+        const altDiff = this.targetAlt - this.altitude;
+        const maxAlt  = 1500 / 60 * dt;
+        this.altitude += Math.abs(altDiff) < maxAlt
+            ? altDiff
+            : Math.sign(altDiff) * maxAlt;
+
+        // Steer toward current waypoint
+        if (this.route.length > 0 && this.wpIndex < this.route.length) {
+            const wp = waypoints[this.route[this.wpIndex]];
+            if (wp) {
+                const dlon = wp.lon - this.lon;
+                const dlat = wp.lat - this.lat;
+                const dist = Math.hypot(dlon, dlat);
+                if (dist < 0.04) {                     // ~4 km capture radius
+                    this.wpIndex++;
+                    if (this.wpIndex >= this.route.length) this.status = 'exited';
+                } else {
+                    const desiredHdg = Math.atan2(dlon, dlat) * (180 / Math.PI);
+                    this.targetHdg   = (desiredHdg + 360) % 360;
+                }
+            }
+        }
+
+        // Move forward in current heading
+        const hdgRad = this.heading * Math.PI / 180;
+        // 1 knot ≈ 1.852 km/h ≈ 1/3600 nm/s; 1° lat ≈ 111 km
+        const degPerSec = (this.speed * 1.852) / (3600 * 111);
+        this.lat += Math.cos(hdgRad) * degPerSec * dt;
+        this.lon += Math.sin(hdgRad) * degPerSec * dt;
+
+        this.trail.push({ lat: this.lat, lon: this.lon });
+        if (this.trail.length > this.TRAIL_LEN) this.trail.shift();
+    }
+
+    receiveInstruction(instr) {
+        switch (instr.type) {
+            case 'climb':
+            case 'descend':
+            case 'maintain_alt':
+                this.targetAlt = instr.altitude;
+                break;
+            case 'heading':
+                this.targetHdg = instr.heading;
+                break;
+            case 'direct': {
+                // Go direct to named waypoint, then continue rest of route
+                const remaining = this.route.slice(this.wpIndex);
+                const idx = remaining.indexOf(instr.waypoint);
+                if (idx >= 0) {
+                    this.route   = remaining.slice(idx);
+                    this.wpIndex = 0;
+                } else {
+                    this.route   = [instr.waypoint, ...remaining];
+                    this.wpIndex = 0;
+                }
+                break;
+            }
+            case 'speed':
+                this.speed = instr.speed;
+                break;
+        }
+    }
+
+    readback(instr) {
+        const cs = this.phonetic;
+        switch (instr.type) {
+            case 'climb':        return `${cs}, climbing to ${instr.display}.`;
+            case 'descend':      return `${cs}, descending to ${instr.display}.`;
+            case 'maintain_alt': return `${cs}, maintaining ${instr.display}.`;
+            case 'heading':      return `${cs}, turning ${instr.direction || ''} heading ${instr.heading}.`.replace('turning  ', 'turning ');
+            case 'direct':       return `${cs}, direct ${instr.waypoint}.`;
+            case 'speed':        return `${cs}, speed ${instr.speed} knots.`;
+            case 'contact':      return `${cs}, contacting ${instr.who}, good day.`;
+            case 'land':         return `${cs}, cleared to land, runway ${instr.runway || ''}.`;
+            case 'takeoff':      return `${cs}, cleared for takeoff.`;
+            default:             return `${cs}, wilco.`;
+        }
+    }
+
+    currentWaypoint() {
+        return this.route[this.wpIndex] || null;
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Radar-style canvas map renderer.
+ * Coordinate system: lon/lat → canvas x/y with a Mercator-ish linear projection.
+ */
+
+// Simplified Israel border polygon  [lon, lat]  clockwise from NW coast
+const ISRAEL_POLY = [
+    [34.95, 33.09],   // Rosh HaNikra (NW)
+    [35.10, 33.22],   // Near Metula
+    [35.35, 33.27],   // Northern border
+    [35.68, 33.25],   // NE (upper Golan)
+    [35.92, 33.06],   // Golan east
+    [35.87, 32.93],   // Golan south
+    [35.68, 32.70],   // East of Sea of Galilee
+    [35.57, 32.40],   // Jordan River valley
+    [35.57, 31.95],   // Central Jordan Valley
+    [35.55, 31.60],   // NW Dead Sea
+    [35.55, 31.50],   // Dead Sea mid
+    [35.46, 31.10],   // Dead Sea south
+    [35.35, 30.87],   // Arava south
+    [34.95, 29.56],   // Eilat (S tip)
+    [34.78, 29.55],   // Gulf of Aqaba coast
+    [34.27, 29.55],   // Egypt–Israel border (Sinai)
+    [34.27, 30.88],   // Negev highlands
+    [34.23, 31.22],   // Rafah corner
+    [34.37, 31.35],   // Near Gaza strip
+    [34.48, 31.55],   // Near Ashdod
+    [34.66, 31.90],   // South Tel Aviv
+    [34.77, 32.07],   // Tel Aviv coast
+    [34.87, 32.52],   // Netanya
+    [34.95, 32.82],   // Haifa bay
+    [35.07, 33.00],   // Haifa north coast
+    [34.95, 33.09],   // close
+];
+
+const PAD = 50; // canvas padding px
+
+class MapRenderer {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx    = canvas.getContext('2d');
+        this.scale  = 1;
+        this.ox     = 0;   // lon offset
+        this.oy     = 0;   // lat offset (screen flipped)
+        this._computeTransform();
+    }
+
+    resize() {
+        this.canvas.width  = this.canvas.clientWidth;
+        this.canvas.height = this.canvas.clientHeight;
+        this._computeTransform();
+    }
+
+    _computeTransform() {
+        const lons  = ISRAEL_POLY.map(p => p[0]);
+        const lats  = ISRAEL_POLY.map(p => p[1]);
+        const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+        const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+
+        const W = this.canvas.width  - PAD * 2;
+        const H = this.canvas.height - PAD * 2;
+
+        const sx = W / (maxLon - minLon);
+        const sy = H / (maxLat - minLat);
+        this.scale = Math.min(sx, sy);
+
+        const mw = (maxLon - minLon) * this.scale;
+        const mh = (maxLat - minLat) * this.scale;
+
+        // ox, oy chosen so the map is centred within the padded area
+        this.ox = PAD + (W - mw) / 2 - minLon * this.scale;
+        // oy is the y value at lat=0; latitude grows up, y grows down
+        this.oy = this.canvas.height - PAD - (H - mh) / 2 + minLat * this.scale;
+
+        this._bounds = { minLon, maxLon, minLat, maxLat };
+    }
+
+    ll2px(lat, lon) {
+        return {
+            x: lon * this.scale + this.ox,
+            y: this.oy - lat * this.scale,
+        };
+    }
+
+    // ── Clear ──────────────────────────────────────────────────────────────────
+    clear() {
+        const ctx = this.ctx;
+        ctx.fillStyle = '#050510';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Subtle radar sweep overlay
+        this._drawRadarGrid();
+    }
+
+    _drawRadarGrid() {
+        const ctx = this.ctx;
+        const { minLon, maxLon, minLat, maxLat } = this._bounds;
+
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0,80,60,0.18)';
+        ctx.lineWidth   = 0.5;
+
+        // Lat lines every 0.5°
+        for (let lat = Math.ceil(minLat * 2) / 2; lat <= maxLat; lat += 0.5) {
+            const { y } = this.ll2px(lat, 0);
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(this.canvas.width, y);
+            ctx.stroke();
+        }
+        // Lon lines every 0.5°
+        for (let lon = Math.ceil(minLon * 2) / 2; lon <= maxLon; lon += 0.5) {
+            const { x } = this.ll2px(0, lon);
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, this.canvas.height);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    // ── Country outline ────────────────────────────────────────────────────────
+    drawBorder() {
+        const ctx = this.ctx;
+        ctx.beginPath();
+        for (let i = 0; i < ISRAEL_POLY.length; i++) {
+            const [lon, lat] = ISRAEL_POLY[i];
+            const { x, y } = this.ll2px(lat, lon);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+
+        ctx.fillStyle   = 'rgba(255,255,255,0.025)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+        ctx.lineWidth   = 1.5;
+        ctx.stroke();
+    }
+
+    // ── Waypoints ──────────────────────────────────────────────────────────────
+    drawWaypoints(waypoints) {
+        const ctx = this.ctx;
+        ctx.save();
+        for (const [name, wp] of Object.entries(waypoints)) {
+            const { x, y } = this.ll2px(wp.lat, wp.lon);
+
+            // cross symbol
+            ctx.strokeStyle = 'rgba(80,100,255,0.65)';
+            ctx.lineWidth   = 1;
+            ctx.beginPath();
+            ctx.moveTo(x - 6, y); ctx.lineTo(x + 6, y);
+            ctx.moveTo(x, y - 6); ctx.lineTo(x, y + 6);
+            ctx.stroke();
+
+            ctx.fillStyle = 'rgba(100,130,255,0.85)';
+            ctx.font      = '9px Courier New';
+            ctx.fillText(name, x + 7, y - 3);
+        }
+        ctx.restore();
+    }
+
+    // ── Planned routes (dashed) ────────────────────────────────────────────────
+    drawRoutes(planes, waypoints) {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.setLineDash([4, 5]);
+        ctx.lineWidth = 0.8;
+        for (const p of planes) {
+            if (p.status === 'exited') continue;
+            ctx.strokeStyle = `${p.color}55`;
+            ctx.beginPath();
+            let first = true;
+            for (let i = p.wpIndex; i < p.route.length; i++) {
+                const wp = waypoints[p.route[i]];
+                if (!wp) continue;
+                const { x, y } = this.ll2px(wp.lat, wp.lon);
+                first ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                first = false;
+            }
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        ctx.restore();
+    }
+
+    // ── Plane trail ────────────────────────────────────────────────────────────
+    _drawTrail(plane) {
+        if (plane.trail.length < 2) return;
+        const ctx = this.ctx;
+        ctx.beginPath();
+        for (let i = 0; i < plane.trail.length; i++) {
+            const { x, y } = this.ll2px(plane.trail[i].lat, plane.trail[i].lon);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = `${plane.color}44`;
+        ctx.lineWidth   = 1;
+        ctx.stroke();
+    }
+
+    // ── Plane symbol ───────────────────────────────────────────────────────────
+    _drawPlane(plane) {
+        const { x, y } = this.ll2px(plane.lat, plane.lon);
+        const ctx  = this.ctx;
+        const size = plane.selected ? 13 : 10;
+        const hdgR = plane.heading * Math.PI / 180;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(hdgR);
+
+        // Plane body: narrow triangle pointing up (north = 0°)
+        ctx.beginPath();
+        ctx.moveTo(0, -size);
+        ctx.lineTo(size * 0.45, size * 0.55);
+        ctx.lineTo(0, size * 0.1);
+        ctx.lineTo(-size * 0.45, size * 0.55);
+        ctx.closePath();
+
+        ctx.fillStyle   = plane.selected ? '#ffffff' : plane.color;
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth   = 0.5;
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+
+        // Label
+        const fl   = Math.round(plane.altitude / 100);
+        const flStr = fl >= 100 ? `FL${fl}` : `${Math.round(plane.altitude)}ft`;
+
+        ctx.font      = plane.selected ? 'bold 11px Courier New' : '10px Courier New';
+        ctx.fillStyle = plane.color;
+        ctx.fillText(`${plane.callsign}  ${flStr}`, x + 14, y - 2);
+        ctx.font      = '9px Courier New';
+        ctx.fillStyle = '#778899';
+        ctx.fillText(`${Math.round(plane.heading).toString().padStart(3,'0')}°  ${plane.speed}kt`, x + 14, y + 10);
+    }
+
+    // ── Render everything ──────────────────────────────────────────────────────
+    render(planes, waypoints, selectedCallsign) {
+        this.clear();
+        this.drawBorder();
+        this.drawWaypoints(waypoints);
+        this.drawRoutes(planes, waypoints);
+
+        for (const p of planes) {
+            if (p.status === 'exited') continue;
+            this._drawTrail(p);
+        }
+        for (const p of planes) {
+            if (p.status === 'exited') continue;
+            p.selected = p.callsign === selectedCallsign;
+            this._drawPlane(p);
+        }
+    }
+
+    // ── Hit-test planes ────────────────────────────────────────────────────────
+    planeAt(mx, my, planes) {
+        for (const p of planes) {
+            if (p.status === 'exited') continue;
+            const { x, y } = this.ll2px(p.lat, p.lon);
+            if (Math.hypot(mx - x, my - y) < 16) return p;
+        }
+        return null;
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+
+class SpeechController {
+    constructor() {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        this.available = !!SR;
+        if (!this.available) return;
+
+        this.rec = new SR();
+        this.rec.continuous    = false;
+        this.rec.lang          = 'en-US';
+        this.rec.interimResults= true;
+        this.rec.maxAlternatives = 3;
+
+        this.listening = false;
+        this.onInterim = null;   // cb(text)
+        this.onFinal   = null;   // cb(text)
+
+        this.rec.onresult = (ev) => {
+            let interim = '', final = '';
+            for (let i = ev.resultIndex; i < ev.results.length; i++) {
+                const t = ev.results[i][0].transcript;
+                ev.results[i].isFinal ? (final += t) : (interim += t);
+            }
+            if (interim && this.onInterim) this.onInterim(interim);
+            if (final   && this.onFinal)   this.onFinal(final);
+        };
+
+        this.rec.onend = () => { this.listening = false; };
+
+        this.rec.onerror = (e) => {
+            if (e.error !== 'no-speech') console.warn('[speech]', e.error);
+            this.listening = false;
+        };
+    }
+
+    start() {
+        if (!this.available || this.listening) return;
+        try { this.rec.start(); this.listening = true; } catch (_) {}
+    }
+
+    stop() {
+        if (!this.available || !this.listening) return;
+        try { this.rec.stop(); } catch (_) {}
+        this.listening = false;
+    }
+
+    speak(text) {
+        if (!window.speechSynthesis) return;
+        // Cancel any ongoing utterance so readbacks don't pile up
+        window.speechSynthesis.cancel();
+        const utt    = new SpeechSynthesisUtterance(text);
+        utt.rate     = 1.05;
+        utt.pitch    = 0.85;
+        utt.volume   = 1.0;
+        window.speechSynthesis.speak(utt);
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Scoring engine.
+ *
+ * Each level has timed events.  When an event fires the controller should issue
+ * the expected instruction within RESPONSE_WINDOW seconds.
+ * A command is scored on three axes:
+ *   • Callsign accuracy   (30 pts)
+ *   • Instruction type    (40 pts)
+ *   • Value accuracy      (30 pts, proportional to how close the value is)
+ */
+
+const RESPONSE_WINDOW = 90; // seconds after event fires
+
+class Scorer {
+    constructor() { this._reset(); }
+
+    _reset() {
+        this.entries   = [];
+        this.total     = 0;
+        this.maxTotal  = 0;
+    }
+
+    reset() { this._reset(); }
+
+    /**
+     * Evaluate a controller command against a pending event.
+     * @param {object} parsed  - { callsign, instruction }
+     * @param {object} event   - level event object with .callsign, .instruction
+     * @param {number} elapsed - seconds since event fired
+     * @returns {{ score, max, details }}
+     */
+    evaluate(parsed, event, elapsed) {
+        const expected = event.instruction;
+        let score = 0, max = 100, details = [];
+
+        // Callsign (30 pts)
+        const csOk = parsed.callsign === event.callsign;
+        score += csOk ? 30 : 0;
+        details.push({ item: 'Correct callsign', earned: csOk ? 30 : 0, max: 30 });
+
+        // Instruction type (40 pts)
+        const typeOk = parsed.instruction?.type === expected.type;
+        score += typeOk ? 40 : 0;
+        details.push({ item: 'Correct instruction type', earned: typeOk ? 40 : 0, max: 40 });
+
+        // Value (30 pts, graduated)
+        const givenVal = parsed.instruction?.altitude
+            ?? parsed.instruction?.heading
+            ?? parsed.instruction?.speed
+            ?? null;
+        const expVal   = expected.value ?? null;
+
+        if (expVal !== null && givenVal !== null) {
+            const err   = Math.abs(givenVal - expVal) / Math.max(expVal, 1);
+            const frac  = Math.max(0, 1 - err);          // 0–1
+            const pts   = Math.round(frac * 30);
+            score += pts;
+            details.push({ item: 'Value accuracy', earned: pts, max: 30 });
+        } else {
+            // No numeric value expected (e.g. direct-to, contact)
+            score += 30;
+            details.push({ item: 'Value accuracy', earned: 30, max: 30 });
+        }
+
+        // Timing bonus: –10 pts if responded > 30 s late (up to –20 at 60 s)
+        if (elapsed > 30) {
+            const penalty = Math.min(20, Math.round((elapsed - 30) / 1.5));
+            score = Math.max(0, score - penalty);
+            details.push({ item: 'Timing penalty', earned: -penalty, max: 0 });
+        }
+
+        this.total    += score;
+        this.maxTotal += max;
+        this.entries.push({ event, parsed, score, max, details });
+
+        return { score, max, details };
+    }
+
+    /** Record commands that didn't match any pending event (no score awarded). */
+    recordExtra(parsed) {
+        this.entries.push({ event: null, parsed, score: 0, max: 0, details: [] });
+    }
+
+    summary() {
+        const pct = this.maxTotal > 0
+            ? Math.round(this.total / this.maxTotal * 100)
+            : 0;
+        return {
+            total:   this.total,
+            max:     this.maxTotal,
+            pct,
+            entries: this.entries,
+            grade:   pct >= 90 ? 'A' : pct >= 75 ? 'B' : pct >= 60 ? 'C' : pct >= 40 ? 'D' : 'F',
+        };
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Level 1 — Introduction
+ *
+ * Two aircraft, five instructions, 5-minute session.
+ * Designed for beginners: plenty of time between events.
+ *
+ * ─────────────────────────────────────────────────────────────────
+ * Level format reference:
+ *
+ *   name        string   Displayed in the level selector
+ *   description string   Shown in the log at start
+ *   duration    number   Seconds until session ends
+ *
+ *   waypoints   object   { ID: { lat, lon, name } }
+ *
+ *   aircraft[]  array    Each plane:
+ *     callsign  string   e.g. "ELY101"
+ *     phonetic  string   How the pilot says the callsign: "El Al One Zero One"
+ *     lat/lon   number   Starting position (decimal degrees)
+ *     altitude  number   Starting altitude in feet
+ *     speed     number   Airspeed in knots
+ *     heading   number   Initial heading (degrees true, 0 = north)
+ *     color     string   CSS colour for this aircraft
+ *     route     string[] Waypoint IDs to follow in order
+ *
+ *   events[]    array    Timed instruction prompts:
+ *     time        number   Seconds into simulation when this fires
+ *     callsign    string   Which aircraft to instruct
+ *     instruction object   Expected ATC command:
+ *       type     'climb'|'descend'|'heading'|'direct'|'speed'|'contact'|'land'|'takeoff'
+ *       value    number   Expected altitude (ft), heading (°), or speed (kt)
+ *       display  string   Human-readable value label
+ *     hint        string   Suggested phraseology shown to the controller
+ * ─────────────────────────────────────────────────────────────────
+ */
+const LEVEL1 = {
+    name:        'Level 1 — Introduction',
+    description: 'Two aircraft in Israeli airspace. Follow the prompts and issue each clearance.',
+    duration:    300,
+
+    waypoints: {
+        TLV: { lat: 32.01, lon: 34.88, name: 'Tel Aviv' },
+        HFA: { lat: 32.81, lon: 35.00, name: 'Haifa' },
+        BEG: { lat: 31.23, lon: 34.78, name: 'Beer Sheva' },
+        ELT: { lat: 29.56, lon: 34.95, name: 'Eilat' },
+        JRS: { lat: 31.77, lon: 35.22, name: 'Jerusalem' },
+        SDO: { lat: 30.87, lon: 34.80, name: 'Sde Ovad' },
+    },
+
+    aircraft: [
+        {
+            callsign: 'ELY101',
+            phonetic: 'El Al One Zero One',
+            lat: 32.45, lon: 34.90,
+            altitude: 10000, speed: 280, heading: 190,
+            color: '#00ff88',
+            route: ['TLV', 'BEG', 'SDO', 'ELT'],
+        },
+        {
+            callsign: 'ISR202',
+            phonetic: 'Israel Air Two Zero Two',
+            lat: 32.75, lon: 35.10,
+            altitude: 8000, speed: 250, heading: 220,
+            color: '#00aaff',
+            route: ['HFA', 'TLV', 'JRS'],
+        },
+    ],
+
+    events: [
+        {
+            time: 25,
+            callsign: 'ELY101',
+            instruction: { type: 'descend', value: 6000, display: '6,000 ft' },
+            hint: 'El Al One Zero One, descend to six thousand feet.',
+        },
+        {
+            time: 70,
+            callsign: 'ISR202',
+            instruction: { type: 'heading', value: 200, display: 'heading 200' },
+            hint: 'Israel Air Two Zero Two, turn left heading two zero zero.',
+        },
+        {
+            time: 120,
+            callsign: 'ELY101',
+            instruction: { type: 'climb', value: 9000, display: '9,000 ft' },
+            hint: 'El Al One Zero One, climb to nine thousand feet.',
+        },
+        {
+            time: 180,
+            callsign: 'ISR202',
+            instruction: { type: 'descend', value: 5000, display: '5,000 ft' },
+            hint: 'Israel Air Two Zero Two, descend to five thousand feet.',
+        },
+        {
+            time: 240,
+            callsign: 'ELY101',
+            instruction: { type: 'heading', value: 160, display: 'heading 160' },
+            hint: 'El Al One Zero One, turn right heading one six zero.',
+        },
+    ],
+};
+
+
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Level 2 — Rush Hour
+ * Three aircraft, faster pace, mixed instruction types.
+ */
+const LEVEL2 = {
+    name:        'Level 2 — Rush Hour',
+    description: 'Three aircraft simultaneously. Instructions come faster — stay sharp.',
+    duration:    420,
+
+    waypoints: {
+        TLV: { lat: 32.01, lon: 34.88, name: 'Tel Aviv' },
+        HFA: { lat: 32.81, lon: 35.00, name: 'Haifa' },
+        BEG: { lat: 31.23, lon: 34.78, name: 'Beer Sheva' },
+        ELT: { lat: 29.56, lon: 34.95, name: 'Eilat' },
+        JRS: { lat: 31.77, lon: 35.22, name: 'Jerusalem' },
+        SDO: { lat: 30.87, lon: 34.80, name: 'Sde Ovad' },
+        RAM: { lat: 31.90, lon: 34.83, name: 'Ramla' },
+    },
+
+    aircraft: [
+        {
+            callsign: 'ELY101',
+            phonetic: 'El Al One Zero One',
+            lat: 32.45, lon: 34.90,
+            altitude: 12000, speed: 300, heading: 185,
+            color: '#00ff88',
+            route: ['TLV', 'RAM', 'BEG', 'SDO', 'ELT'],
+        },
+        {
+            callsign: 'ISR202',
+            phonetic: 'Israel Air Two Zero Two',
+            lat: 32.70, lon: 35.15,
+            altitude: 9000, speed: 260, heading: 215,
+            color: '#00aaff',
+            route: ['HFA', 'TLV', 'JRS'],
+        },
+        {
+            callsign: 'ARK303',
+            phonetic: 'Arkia Three Zero Three',
+            lat: 31.80, lon: 35.25,
+            altitude: 6000, speed: 240, heading: 270,
+            color: '#ffaa00',
+            route: ['JRS', 'RAM', 'TLV', 'HFA'],
+        },
+    ],
+
+    events: [
+        {
+            time: 18,
+            callsign: 'ELY101',
+            instruction: { type: 'descend', value: 8000, display: '8,000 ft' },
+            hint: 'El Al One Zero One, descend to eight thousand feet.',
+        },
+        {
+            time: 45,
+            callsign: 'ISR202',
+            instruction: { type: 'heading', value: 180, display: 'heading 180' },
+            hint: 'Israel Air Two Zero Two, turn left heading one eight zero.',
+        },
+        {
+            time: 80,
+            callsign: 'ARK303',
+            instruction: { type: 'climb', value: 9000, display: '9,000 ft' },
+            hint: 'Arkia Three Zero Three, climb to nine thousand feet.',
+        },
+        {
+            time: 130,
+            callsign: 'ELY101',
+            instruction: { type: 'heading', value: 155, display: 'heading 155' },
+            hint: 'El Al One Zero One, turn right heading one five five.',
+        },
+        {
+            time: 170,
+            callsign: 'ISR202',
+            instruction: { type: 'descend', value: 5000, display: '5,000 ft' },
+            hint: 'Israel Air Two Zero Two, descend to five thousand feet.',
+        },
+        {
+            time: 210,
+            callsign: 'ARK303',
+            instruction: { type: 'heading', value: 320, display: 'heading 320' },
+            hint: 'Arkia Three Zero Three, turn right heading three two zero.',
+        },
+        {
+            time: 260,
+            callsign: 'ELY101',
+            instruction: { type: 'climb', value: 10000, display: '10,000 ft' },
+            hint: 'El Al One Zero One, climb to one zero thousand feet.',
+        },
+        {
+            time: 310,
+            callsign: 'ARK303',
+            instruction: { type: 'descend', value: 4000, display: '4,000 ft' },
+            hint: 'Arkia Three Zero Three, descend to four thousand feet.',
+        },
+        {
+            time: 360,
+            callsign: 'ISR202',
+            instruction: { type: 'climb', value: 7000, display: '7,000 ft' },
+            hint: 'Israel Air Two Zero Two, climb to seven thousand feet.',
+        },
+    ],
+};
+
+
+// ─────────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+const LEVELS = { '1': LEVEL1, '2': LEVEL2 };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function hhmmss(sec) {
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = Math.floor(sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+}
+
+// ── Game class ────────────────────────────────────────────────────────────────
+class ATCGame {
+    constructor() {
+        this.canvas   = document.getElementById('map-canvas');
+        this.map      = new MapRenderer(this.canvas);
+        this.speech   = new SpeechController();
+        this.scorer   = new Scorer();
+
+        this.level       = null;
+        this.planes      = [];
+        this.waypoints   = {};
+        this.events      = [];        // remaining (unfired) level events
+        this.activeEvent = null;      // event waiting for controller response
+        this.activeEventFiredAt = 0;  // gameTime when activeEvent fired
+
+        this.gameTime    = 0;
+        this.running     = false;
+        this.paused      = false;
+        this.lastTick    = 0;
+        this.selected    = null;      // selected callsign string
+
+        this._bindUI();
+        this._bindSpeech();
+        this._resize();
+        window.addEventListener('resize', () => this._resize());
+
+        // Initial empty render
+        this.map.resize();
+        this.map.clear();
+        this.map.drawBorder();
+    }
+
+    // ── UI bindings ────────────────────────────────────────────────────────────
+    _bindUI() {
+        document.getElementById('btn-start').addEventListener('click',  () => this._startGame());
+        document.getElementById('btn-pause').addEventListener('click',  () => this._togglePause());
+        document.getElementById('btn-close-score').addEventListener('click', () => {
+            document.getElementById('score-modal').classList.add('hidden');
+        });
+
+        // PTT button
+        const ptt = document.getElementById('btn-ptt');
+        ptt.addEventListener('mousedown',  () => this._pttOn());
+        ptt.addEventListener('mouseup',    () => this._pttOff());
+        ptt.addEventListener('mouseleave', () => this._pttOff());
+
+        // Spacebar PTT
+        document.addEventListener('keydown', e => {
+            if (e.code === 'Space' && !e.repeat && !document.activeElement.matches('input')) {
+                e.preventDefault(); this._pttOn();
+            }
+        });
+        document.addEventListener('keyup', e => {
+            if (e.code === 'Space') { e.preventDefault(); this._pttOff(); }
+        });
+
+        // Text input fallback
+        document.getElementById('btn-send').addEventListener('click', () => this._submitText());
+        document.getElementById('text-cmd').addEventListener('keydown', e => {
+            if (e.key === 'Enter') this._submitText();
+        });
+
+        // Click plane on map
+        this.canvas.addEventListener('click', e => {
+            const rect  = this.canvas.getBoundingClientRect();
+            const plane = this.map.planeAt(e.clientX - rect.left, e.clientY - rect.top, this.planes);
+            this.selected = plane ? plane.callsign : null;
+            this._updateStrips();
+        });
+    }
+
+    _bindSpeech() {
+        if (!this.speech.available) {
+            this._log('Voice recognition unavailable in this browser. Use text input.', 'warn');
+            document.getElementById('btn-ptt').disabled = true;
+        }
+
+        this.speech.onInterim = t => {
+            document.getElementById('transcript-display').textContent = t + '…';
+        };
+        this.speech.onFinal = t => {
+            document.getElementById('transcript-display').textContent = t;
+            this._processCommand(t);
+        };
+    }
+
+    // ── PTT ────────────────────────────────────────────────────────────────────
+    _pttOn() {
+        if (!this.running || this.paused) return;
+        document.getElementById('btn-ptt').classList.add('active');
+        document.getElementById('voice-dot').classList.add('on');
+        this.speech.start();
+    }
+    _pttOff() {
+        document.getElementById('btn-ptt').classList.remove('active');
+        document.getElementById('voice-dot').classList.remove('on');
+        this.speech.stop();
+    }
+
+    // ── Text input fallback ────────────────────────────────────────────────────
+    _submitText() {
+        if (!this.running || this.paused) return;
+        const el  = document.getElementById('text-cmd');
+        const val = el.value.trim();
+        if (!val) return;
+        el.value = '';
+        document.getElementById('transcript-display').textContent = val;
+        this._processCommand(val);
+    }
+
+    // ── Parse & execute command ────────────────────────────────────────────────
+    _processCommand(transcript) {
+        if (!transcript.trim()) return;
+        this._log(`[CTR] ${transcript}`, 'ctrl');
+
+        const known  = this.planes.map(p => ({ callsign: p.callsign, phonetic: p.phonetic }));
+        const parsed = parseATCCommand(transcript, known);
+
+        if (parsed.error) {
+            this._log(parsed.error, 'warn');
+            return;
+        }
+
+        const plane = this.planes.find(p => p.callsign === parsed.callsign);
+        if (!plane) {
+            this._log(`Unknown callsign: ${parsed.callsign}`, 'warn');
+            return;
+        }
+
+        const instr = parsed.instruction;
+        if (instr.type === 'unknown') {
+            this._log(`Could not parse instruction — try again.`, 'warn');
+            return;
+        }
+
+        plane.receiveInstruction(instr);
+        const rb = plane.readback(instr);
+        document.getElementById('readback-display').textContent = rb;
+        this.speech.speak(rb);
+        this._log(`[${plane.callsign}] ${rb}`, 'ac');
+        this._updateStrips();
+
+        // Scoring
+        if (this.activeEvent && this.activeEvent.callsign === parsed.callsign) {
+            const elapsed = this.gameTime - this.activeEventFiredAt;
+            const result  = this.scorer.evaluate(parsed, this.activeEvent, elapsed);
+            const pct     = Math.round(result.score / result.max * 100);
+            this._log(`Score: ${result.score}/${result.max} (${pct}%)`, 'sys');
+
+            // Clear active event and hint
+            this.activeEvent = null;
+            document.getElementById('hint-display').classList.remove('visible');
+            document.getElementById('hint-display').textContent = '';
+            this._updateScore();
+        } else {
+            this.scorer.recordExtra(parsed);
+        }
+    }
+
+    // ── Game lifecycle ─────────────────────────────────────────────────────────
+    _startGame() {
+        const key   = document.getElementById('level-select').value;
+        this.level  = LEVELS[key];
+
+        this.scorer.reset();
+        this.gameTime  = 0;
+        this.running   = true;
+        this.paused    = false;
+        this.lastTick  = performance.now();
+        this.selected  = null;
+        this.activeEvent = null;
+
+        this.waypoints = this.level.waypoints;
+        this.planes    = this.level.aircraft.map(cfg => new Plane(cfg));
+        // Deep-copy events, add runtime fields
+        this.events    = this.level.events.map(ev => ({ ...ev, fired: false }));
+
+        document.getElementById('btn-start').textContent  = '↺ Restart';
+        document.getElementById('btn-pause').disabled     = false;
+        document.getElementById('score-modal').classList.add('hidden');
+        document.getElementById('hint-display').classList.remove('visible');
+        document.getElementById('readback-display').textContent = '';
+        document.getElementById('transcript-display').textContent = '';
+
+        this._updateStrips();
+        this._updateScore();
+        this._log(`═══ ${this.level.name} ═══`, 'sys');
+        this._log(this.level.description, 'sys');
+        this._log('Press Space (or PTT button) to transmit.', 'sys');
+
+        requestAnimationFrame(t => this._loop(t));
+    }
+
+    _togglePause() {
+        this.paused = !this.paused;
+        document.getElementById('btn-pause').textContent = this.paused ? '▶ Resume' : '⏸ Pause';
+        if (!this.paused) {
+            this.lastTick = performance.now();
+            requestAnimationFrame(t => this._loop(t));
+        }
+    }
+
+    // ── Main loop ──────────────────────────────────────────────────────────────
+    _loop(ts) {
+        if (!this.running || this.paused) return;
+
+        const dt      = Math.min((ts - this.lastTick) / 1000, 0.1);
+        this.lastTick = ts;
+        this.gameTime += dt;
+
+        // Update planes
+        for (const p of this.planes) p.update(dt, this.waypoints);
+
+        // Check scheduled events
+        this._fireEvents();
+
+        // Update timer display
+        document.getElementById('timer').textContent = hhmmss(this.gameTime);
+
+        // Render
+        this.map.render(this.planes, this.waypoints, this.selected);
+
+        // End condition
+        if (this.gameTime >= this.level.duration) {
+            this._endGame();
+            return;
+        }
+
+        requestAnimationFrame(t => this._loop(t));
+    }
+
+    _fireEvents() {
+        for (const ev of this.events) {
+            if (!ev.fired && ev.time <= this.gameTime) {
+                ev.fired = true;
+
+                // If there's an unresponded event, score it as missed
+                if (this.activeEvent) {
+                    this._log(`Missed instruction for ${this.activeEvent.callsign}!`, 'warn');
+                    // Count as a zero-score attempt
+                    this.scorer.evaluate(
+                        { callsign: '', instruction: { type: 'unknown' } },
+                        this.activeEvent,
+                        this.gameTime - this.activeEventFiredAt
+                    );
+                    this._updateScore();
+                }
+
+                this.activeEvent        = ev;
+                this.activeEventFiredAt = this.gameTime;
+
+                this._log(`► Instruct ${ev.callsign}`, 'sys');
+                if (ev.hint) {
+                    const hd = document.getElementById('hint-display');
+                    hd.textContent = `💬 ${ev.hint}`;
+                    hd.classList.add('visible');
+                }
+            }
+        }
+    }
+
+    _endGame() {
+        this.running = false;
+        document.getElementById('btn-pause').disabled = true;
+
+        // Score any lingering active event as missed
+        if (this.activeEvent) {
+            this.scorer.evaluate(
+                { callsign: '', instruction: { type: 'unknown' } },
+                this.activeEvent,
+                this.gameTime - this.activeEventFiredAt
+            );
+            this.activeEvent = null;
+        }
+
+        const s    = this.scorer.summary();
+        const rows = [];
+
+        rows.push(`<div class="srow"><span class="lbl">Total score</span><span class="val">${s.total} / ${s.max}</span></div>`);
+        rows.push(`<div class="srow ${s.pct >= 75 ? 'good' : s.pct < 50 ? 'bad' : ''}"><span class="lbl">Accuracy</span><span class="val">${s.pct}%  (Grade ${s.grade})</span></div>`);
+        rows.push(`<div class="srow"><span class="lbl">Instructions evaluated</span><span class="val">${s.entries.filter(e => e.event).length}</span></div>`);
+
+        rows.push(`<div class="score-section-title">Per instruction</div>`);
+
+        for (const e of s.entries.filter(x => x.event)) {
+            const cs  = e.event.callsign;
+            const lbl = `${cs} — ${e.event.instruction.display}`;
+            const pct = Math.round(e.score / e.max * 100);
+            const cls = pct >= 75 ? 'good' : pct < 40 ? 'bad' : '';
+            rows.push(`<div class="srow ${cls}"><span class="lbl">${lbl}</span><span class="val">${e.score}/${e.max} (${pct}%)</span></div>`);
+            for (const d of e.details) {
+                if (d.earned < d.max || d.earned < 0) {
+                    rows.push(`<div class="srow" style="padding-left:16px;font-size:11px"><span class="lbl" style="color:#556">${d.item}</span><span class="val" style="color:${d.earned < 0 ? '#f66':'#888'}">${d.earned > 0 ? '+' : ''}${d.earned}</span></div>`);
+                }
+            }
+        }
+
+        document.getElementById('score-breakdown').innerHTML = rows.join('');
+        document.getElementById('score-modal').classList.remove('hidden');
+        this._log(`═══ Session ended — ${s.pct}% (${s.grade}) ═══`, 'sys');
+    }
+
+    // ── UI helpers ─────────────────────────────────────────────────────────────
+    _updateStrips() {
+        const container = document.getElementById('strips');
+        container.innerHTML = '';
+
+        for (const p of this.planes) {
+            const div = document.createElement('div');
+            div.className = 'strip' + (p.callsign === this.selected ? ' selected' : '');
+
+            const fl    = Math.round(p.altitude / 100);
+            const flStr = fl >= 100 ? `FL${fl}` : `${Math.round(p.altitude)} ft`;
+            const tfl   = Math.round(p.targetAlt / 100);
+            const tflStr= tfl >= 100 ? `FL${tfl}` : `${Math.round(p.targetAlt)} ft`;
+            const arrow = p.targetAlt > p.altitude ? '↑' : p.targetAlt < p.altitude ? '↓' : '—';
+
+            div.innerHTML = `
+                <div class="cs ${p.callsign === this.selected ? 'selected' : ''}"
+                     style="color:${p.color}">${p.callsign}</div>
+                <div class="det">
+                    ALT ${flStr} ${arrow} ${tflStr}<br>
+                    HDG ${Math.round(p.heading).toString().padStart(3,'0')}°
+                    SPD ${p.speed} kt
+                    WP ${p.currentWaypoint() || '—'}
+                </div>
+            `;
+            div.addEventListener('click', () => {
+                this.selected = p.callsign;
+                this._updateStrips();
+            });
+            container.appendChild(div);
+        }
+    }
+
+    _updateScore() {
+        const s = this.scorer.summary();
+        document.getElementById('score-display').textContent = `Score: ${s.total}`;
+    }
+
+    _log(text, type = 'sys') {
+        const log   = document.getElementById('log');
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type}`;
+        entry.innerHTML = `<span class="ts">${hhmmss(this.gameTime)}</span>${text}`;
+        log.appendChild(entry);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    _resize() {
+        this.map.resize();
+    }
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => { new ATCGame(); });
+
+</script>
+</body>
+</html>
