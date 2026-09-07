@@ -1,0 +1,38 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# מאפשר לריצה חדשה להחליף ריצה שעדיין לא הסתיימה, בלי לבטל פרסום שכבר רץ.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # enablement מפעיל את Pages בהרצה הראשונה, כדי שלא יידרש שינוי ידני בהגדרות.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      # האתר הוא HTML/CSS/JS סטטי — אין שלב build, מעלים את הריפו כמו שהוא.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
