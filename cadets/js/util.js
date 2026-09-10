@@ -90,6 +90,49 @@ window.App = window.App || {};
       return null;
     },
 
+    /* ===== תקופות של יעד שוטף =====
+       תקופה מיוצגת כמפתח: יום ושבוע כ-"YYYY-MM-DD" (שבוע לפי יום ראשון שלו),
+       חודש כ-"YYYY-MM". */
+    periodKey: function (frequency, iso) {
+      var day = iso || util.today();
+      if (frequency === 'monthly') return day.slice(0, 7);
+      var date = util.parseDate(day);
+      if (!date) return '';
+      if (frequency === 'weekly') {
+        /* השבוע נפתח ביום ראשון, כמקובל בלוח השנה הישראלי. */
+        date.setDate(date.getDate() - date.getDay());
+      }
+      return util.toISODate(date);
+    },
+
+    shiftPeriod: function (frequency, key, delta) {
+      if (frequency === 'monthly') {
+        var parts = key.split('-').map(Number);
+        return util.toISODate(new Date(parts[0], parts[1] - 1 + delta, 1)).slice(0, 7);
+      }
+      var date = util.parseDate(key);
+      if (!date) return key;
+      date.setDate(date.getDate() + delta * (frequency === 'weekly' ? 7 : 1));
+      return util.toISODate(date);
+    },
+
+    /* התקופות האחרונות, מהישנה לחדשה, כשהאחרונה היא התקופה הנוכחית. */
+    recentPeriods: function (frequency, count) {
+      var current = util.periodKey(frequency);
+      var list = [];
+      for (var i = count - 1; i >= 0; i--) list.push(util.shiftPeriod(frequency, current, -i));
+      return list;
+    },
+
+    periodLabel: function (frequency, key) {
+      if (frequency === 'monthly') {
+        var parts = key.split('-');
+        return parts[1] + '/' + parts[0];
+      }
+      if (frequency === 'weekly') return 'השבוע שמתחיל ב-' + util.formatDate(key);
+      return util.formatDate(key);
+    },
+
     downloadFile: function (filename, content, mime) {
       var blob = new Blob([content], { type: (mime || 'text/plain') + ';charset=utf-8' });
       var url = URL.createObjectURL(blob);

@@ -230,6 +230,33 @@ window.App = window.App || {};
       else flat.push(field);
     });
 
+    /* showWhen מאפשר לשדה להופיע רק בהקשר שבו הוא רלוונטי — למשל תדירות
+       שמוצגת רק ליעד שוטף — במקום להציף את הטופס בשדות שלא שייכים. */
+    var byName = {};
+    flat.forEach(function (field) { byName[field.name] = field; });
+
+    function applyVisibility() {
+      flat.forEach(function (field) {
+        if (!field.showWhen) return;
+        var controller = wrappers[field.showWhen.field];
+        if (!controller) return;
+        var current = readField(controller, byName[field.showWhen.field]);
+        var expected = [].concat(field.showWhen.value);
+        wrappers[field.name].hidden = expected.indexOf(current) === -1;
+      });
+    }
+
+    flat.forEach(function (field) {
+      if (!field.showWhen) return;
+      var controller = wrappers[field.showWhen.field];
+      if (controller && !controller.dataset.watched) {
+        controller.dataset.watched = 'yes';
+        controller.addEventListener('change', applyVisibility);
+        controller.addEventListener('input', applyVisibility);
+      }
+    });
+    applyVisibility();
+
     var handle = openModal({
       title: options.title,
       content: form,
@@ -244,6 +271,8 @@ window.App = window.App || {};
 
             flat.forEach(function (field) {
               var wrapper = wrappers[field.name];
+              /* שדה שמוסתר בהקשר הנוכחי אינו נבדק ואינו נאסף. */
+              if (wrapper.hidden) return;
               wrapper.classList.remove('has-error');
               var existingError = wrapper.querySelector('.field__error');
               if (existingError) existingError.remove();

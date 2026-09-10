@@ -27,7 +27,7 @@ js/util.js          עזרי תאריכים, טקסט וקבצים
 js/store.js         שכבת הנתונים: CRUD, נגזרות (ספי התרעה), ייצוא/ייבוא
 js/ui.js            מודאל, בונה טפסים, אישורים ורכיבי תצוגה חוזרים
 js/app.js           ניתוב לפי hash ומסנן סוג הצוער הגלובלי
-js/screens/         מסך לכל קובץ: home, cadets, tasks, meetings, settings
+js/screens/         מסך לכל קובץ: home, cadets, tasks, meetings, goals, settings
 ```
 
 הזרימה פשוטה: כל כתיבה ל-`store` משדרת אירוע, והמסך הנוכחי מצויר מחדש.
@@ -41,4 +41,6 @@ js/screens/         מסך לכל קובץ: home, cadets, tasks, meetings, setti
 |---|---|---|
 | `dueSoonDays` | 7 | משימה "מתקרבת" במסך הבית |
 | `staleTaskDays` | 14 | משימה פתוחה נחשבת "תקועה" ללא עדכון |
-| `contactDays` | 14 | "לא נפגשנו מזמן" — לשני סוגי הצוערים |
+| `contactDays` | 14 | "לא נפגשנו מזמן" — לשני תפקידי הצוער |
+
+אורך רצף ההתמדה של יעד שוטף נקבע ב-`STREAK_LENGTH` באותו קובץ: 10 ימים, 8 שבועות או 6 חודשים.

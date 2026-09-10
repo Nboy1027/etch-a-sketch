@@ -98,28 +98,6 @@ window.App = window.App || {};
     });
   }
 
-  function openGoalForm(cadetId, goalId) {
-    var goal = goalId ? store.goal(goalId) : null;
-    ui.openForm({
-      title: goal ? 'עריכת יעד' : 'יעד אישי חדש',
-      values: goal || { status: 'active', targetDate: '' },
-      fields: [
-        { name: 'title', label: 'היעד', required: true, placeholder: 'לאן אנחנו חותרים' },
-        { name: 'description', label: 'פירוט', type: 'textarea', rows: 3 },
-        [
-          { name: 'targetDate', label: 'תאריך יעד משוער', type: 'date' },
-          { name: 'status', label: 'סטטוס', type: 'select', options: store.GOAL_STATUSES }
-        ]
-      ],
-      onSubmit: function (result) {
-        if (goal) result.id = goal.id;
-        result.cadetId = cadetId;
-        store.saveGoal(result);
-        ui.toast(goal ? 'היעד עודכן' : 'היעד נוסף');
-      }
-    });
-  }
-
   /* ===== רשימת הצוערים ===== */
 
   function renderList(container, context) {
@@ -438,54 +416,18 @@ window.App = window.App || {};
   }
 
   function renderGoalsTab(body, cadet) {
-    var goals = store.goals(cadet.id);
-    var active = goals.filter(function (g) { return g.status === 'active'; });
-    var rest = goals.filter(function (g) { return g.status !== 'active'; });
-
     body.innerHTML =
-      '<p class="hint">יעד הוא כיוון לטווח ארוך. משימה נקודתית שנגזרת ממנו נרשמת בלשונית המשימות.</p>' +
+      '<p class="hint">יעד חד-פעמי נמדד בהשגה; יעד שוטף נמדד בהתמדה — סימון של כל תקופה. ' +
+      'תמונה מרוכזת של כל הצוערים נמצאת במסך היעדים.</p>' +
       '<div class="btn-row" style="margin-bottom:14px">' +
         '<button type="button" class="btn btn--primary btn--sm" id="add-goal">יעד חדש</button>' +
       '</div>' +
-      '<div class="stack" id="goal-list"></div>';
+      '<div id="goal-host"></div>';
 
-    body.querySelector('#add-goal').addEventListener('click', function () { openGoalForm(cadet.id); });
-
-    var list = body.querySelector('#goal-list');
-    if (!goals.length) {
-      list.appendChild(ui.emptyState('אין יעדים', 'הגדר יעד אישי לצוער.'));
-      return;
-    }
-
-    var statusClass = { active: '', achieved: 'ok', cancelled: 'danger' };
-    list.innerHTML = active.concat(rest).map(function (goal) {
-      return '<div class="card">' +
-        '<div class="row">' +
-          '<span class="card__title">' + util.escape(goal.title) + '</span>' +
-          '<span class="badge badge--' + (statusClass[goal.status] || '') + '">' +
-            util.escape(store.label('goalStatus', goal.status)) + '</span>' +
-          '<span class="spacer"></span>' +
-          '<button type="button" class="btn btn--sm btn--ghost" data-goal-edit="' + util.escape(goal.id) + '">עריכה</button>' +
-          '<button type="button" class="btn btn--sm btn--ghost" data-goal-delete="' + util.escape(goal.id) + '">מחיקה</button>' +
-        '</div>' +
-        (goal.targetDate ? '<div class="card__meta">יעד: ' + util.formatDate(goal.targetDate) + '</div>' : '') +
-        (goal.description ? '<div style="margin-top:6px">' + util.escapeMultiline(goal.description) + '</div>' : '') +
-      '</div>';
-    }).join('');
-
-    list.querySelectorAll('[data-goal-edit]').forEach(function (button) {
-      button.addEventListener('click', function () { openGoalForm(cadet.id, button.dataset.goalEdit); });
+    body.querySelector('#add-goal').addEventListener('click', function () {
+      App.screens.goals.openGoalForm(cadet.id);
     });
-    list.querySelectorAll('[data-goal-delete]').forEach(function (button) {
-      button.addEventListener('click', function () {
-        ui.confirm({ title: 'מחיקת יעד', message: 'למחוק את היעד?', confirmLabel: 'מחיקה', danger: true })
-          .then(function (confirmed) {
-            if (!confirmed) return;
-            store.deleteGoal(button.dataset.goalDelete);
-            ui.toast('היעד נמחק');
-          });
-      });
-    });
+    App.screens.goals.renderGoalsInto(body.querySelector('#goal-host'), cadet.id, {});
   }
 
   function renderTimelineTab(body, cadet) {
@@ -516,7 +458,6 @@ window.App = window.App || {};
     render: renderList,
     renderDetail: renderDetail,
     openCadetForm: openCadetForm,
-    openNoteForm: openNoteForm,
-    openGoalForm: openGoalForm
+    openNoteForm: openNoteForm
   };
 })(window.App);

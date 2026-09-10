@@ -13,6 +13,7 @@
     { pattern: /^#\/meetings$/, name: 'meetings', render: function (c, ctx) { App.screens.meetings.render(c, ctx); } },
     { pattern: /^#\/group\/(.+)$/, name: 'meetings', keys: ['id'],
       render: function (c, ctx) { App.screens.meetings.renderGroupDetail(c, ctx); } },
+    { pattern: /^#\/goals$/, name: 'goals', render: function (c, ctx) { App.screens.goals.render(c, ctx); } },
     { pattern: /^#\/settings$/, name: 'settings', render: function (c, ctx) { App.screens.settings.render(c, ctx); } }
   ];
 

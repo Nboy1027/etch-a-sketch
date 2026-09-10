@@ -56,6 +56,27 @@ window.App = window.App || {};
     { value: 'cancelled', label: 'בוטל' }
   ];
 
+  /* יעד חד-פעמי נמדד בהשגה; יעד שוטף נמדד בהתמדה, ולכן אין לו "הושג". */
+  var GOAL_KINDS = [
+    { value: 'once', label: 'חד-פעמי' },
+    { value: 'recurring', label: 'שוטף' }
+  ];
+  var RECURRING_STATUSES = [
+    { value: 'active', label: 'פעיל' },
+    { value: 'cancelled', label: 'הופסק' }
+  ];
+  var FREQUENCIES = [
+    { value: 'daily', label: 'יומי' },
+    { value: 'weekly', label: 'שבועי' },
+    { value: 'monthly', label: 'חודשי' }
+  ];
+  var MARK_STATUSES = [
+    { value: 'done', label: 'התקיים' },
+    { value: 'missed', label: 'לא התקיים' }
+  ];
+  /* כמה תקופות אחורה מוצג רצף ההתמדה, לפי התדירות. */
+  var STREAK_LENGTH = { daily: 10, weekly: 8, monthly: 6 };
+
   function blankData() {
     return {
       schemaVersion: SCHEMA_VERSION,
@@ -88,6 +109,10 @@ window.App = window.App || {};
     }
     base.groupMeetings.forEach(function (meeting) {
       if (!Array.isArray(meeting.entries)) meeting.entries = [];
+    });
+    base.goals.forEach(function (goal) {
+      if (!goal.kind) goal.kind = 'once';
+      if (!goal.marks || typeof goal.marks !== 'object') goal.marks = {};
     });
     /* גיבויים מהגרסה הראשונה שמרו סוג יחיד ב-type. ממירים אותו לרשימת תפקידים. */
     migrated = false;
@@ -143,6 +168,10 @@ window.App = window.App || {};
     SENTIMENTS: SENTIMENTS,
     TONES: TONES,
     GOAL_STATUSES: GOAL_STATUSES,
+    GOAL_KINDS: GOAL_KINDS,
+    RECURRING_STATUSES: RECURRING_STATUSES,
+    FREQUENCIES: FREQUENCIES,
+    MARK_STATUSES: MARK_STATUSES,
 
     init: load,
     /* קריאה מחדש מהאחסון — לסנכרון כשלשונית אחרת של המערכת שמרה נתונים. */
@@ -164,7 +193,9 @@ window.App = window.App || {};
     /* ===== תוויות ===== */
     label: function (collection, value) {
       var list = { role: CADET_ROLES, status: TASK_STATUSES, priority: PRIORITIES,
-                   sentiment: SENTIMENTS, tone: TONES, goalStatus: GOAL_STATUSES }[collection] || [];
+                   sentiment: SENTIMENTS, tone: TONES, goalStatus: GOAL_STATUSES,
+                   goalKind: GOAL_KINDS, frequency: FREQUENCIES,
+                   mark: MARK_STATUSES }[collection] || [];
       var found = util.byId(list.map(function (o) { return { id: o.value, label: o.label }; }), value);
       return found ? found.label : '';
     },
@@ -358,10 +389,15 @@ window.App = window.App || {};
     },
 
     /* ===== יעדים אישיים ===== */
-    goals: function (cadetId) {
-      return util.sortBy(data.goals.filter(function (g) {
-        return !cadetId || g.cadetId === cadetId;
-      }), function (g) { return g.targetDate; });
+    goals: function (cadetId, options) {
+      var opts = options || {};
+      return util.sortBy(data.goals.filter(function (goal) {
+        if (cadetId && goal.cadetId !== cadetId) return false;
+        if (opts.kind && goal.kind !== opts.kind) return false;
+        if (opts.type && opts.type !== 'all' && !store.hasRole(store.cadet(goal.cadetId), opts.type)) return false;
+        if (opts.activeOnly && goal.status !== 'active') return false;
+        return true;
+      }), function (goal) { return goal.targetDate; });
     },
     goal: function (id) { return util.byId(data.goals, id); },
     saveGoal: function (goal) {
@@ -373,6 +409,7 @@ window.App = window.App || {};
         goal.id = util.uid();
         goal.createdAt = util.now();
         goal.updatedAt = goal.createdAt;
+        if (!goal.marks) goal.marks = {};
         data.goals.push(goal);
       }
       emit();
@@ -381,6 +418,62 @@ window.App = window.App || {};
     deleteGoal: function (id) {
       data.goals = data.goals.filter(function (g) { return g.id !== id; });
       emit();
+    },
+
+    /* סימון תקופה של יעד שוטף. status ריק מוחק את הסימון. */
+    markGoal: function (goalId, periodKey, status, note) {
+      var goal = store.goal(goalId);
+      if (!goal) return;
+      if (!goal.marks) goal.marks = {};
+      if (!status) {
+        delete goal.marks[periodKey];
+      } else {
+        goal.marks[periodKey] = { status: status, note: note || '', at: util.now() };
+      }
+      goal.updatedAt = util.now();
+      emit();
+    },
+
+    currentPeriod: function (goal) {
+      return util.periodKey(goal.frequency || 'weekly');
+    },
+
+    /* רצף ההתמדה: התקופות האחרונות עם הסימון של כל אחת.
+       תקופה שלא סומנה נשארת ריקה ואינה נחשבת ככישלון. */
+    goalStreak: function (goal) {
+      var frequency = goal.frequency || 'weekly';
+      var length = STREAK_LENGTH[frequency] || 8;
+      var current = util.periodKey(frequency);
+      var marks = goal.marks || {};
+      var periods = util.recentPeriods(frequency, length).map(function (key) {
+        var mark = marks[key];
+        return {
+          key: key,
+          status: mark ? mark.status : '',
+          note: mark ? mark.note : '',
+          isCurrent: key === current
+        };
+      });
+      var done = periods.filter(function (p) { return p.status === 'done'; }).length;
+      var missed = periods.filter(function (p) { return p.status === 'missed'; }).length;
+      return {
+        frequency: frequency,
+        periods: periods,
+        done: done,
+        missed: missed,
+        marked: done + missed,
+        rate: done + missed ? Math.round((done / (done + missed)) * 100) : null,
+        currentPeriod: current,
+        currentMark: marks[current] || null
+      };
+    },
+
+    /* יעדים שוטפים פעילים שהתקופה הנוכחית שלהם עדיין לא סומנה. */
+    goalsAwaitingMark: function (type) {
+      return store.goals(null, { kind: 'recurring', activeOnly: true, type: type })
+        .filter(function (goal) {
+          return !(goal.marks || {})[store.currentPeriod(goal)];
+        });
     },
 
     /* ===== נגזרות ===== */
