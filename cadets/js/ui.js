@@ -146,13 +146,20 @@ window.App = window.App || {};
           '</div>' +
           (field.options || []).map(function (cadet) {
             var checked = (value || []).indexOf(cadet.id) !== -1 ? ' checked' : '';
-            return '<label class="picker__item" data-type="' + cadet.type + '">' +
+            return '<label class="picker__item" data-roles="' + util.escape((cadet.roles || []).join(' ')) + '">' +
               '<input type="checkbox" value="' + util.escape(cadet.id) + '"' + checked + '>' +
               '<span>' + util.escape(cadet.name) + '</span>' +
-              '<span class="badge badge--' + cadet.type + '">' + util.escape(store.label('type', cadet.type)) + '</span>' +
+              roleBadges(cadet) +
               '</label>';
           }).join('') +
         '</div>';
+    } else if (field.type === 'checkgroup') {
+      controlHtml = '<div class="picker" id="' + id + '">' + (field.options || []).map(function (option) {
+        var checked = (value || []).indexOf(option.value) !== -1 ? ' checked' : '';
+        return '<label class="picker__item">' +
+          '<input type="checkbox" value="' + util.escape(option.value) + '"' + checked + '>' +
+          '<span>' + util.escape(option.label) + '</span></label>';
+      }).join('') + '</div>';
     } else if (field.type === 'static') {
       controlHtml = '<div class="muted">' + util.escapeMultiline(value || '') + '</div>';
     } else {
@@ -171,7 +178,7 @@ window.App = window.App || {};
             var box = item.querySelector('input');
             if (mode === 'none') box.checked = false;
             else if (mode === 'all') box.checked = true;
-            else box.checked = item.dataset.type === mode;
+            else box.checked = (item.dataset.roles || '').split(' ').indexOf(mode) !== -1;
           });
         });
       });
@@ -181,7 +188,7 @@ window.App = window.App || {};
 
   function readField(wrapper, field) {
     if (field.type === 'static') return undefined;
-    if (field.type === 'cadet-picker') {
+    if (field.type === 'cadet-picker' || field.type === 'checkgroup') {
       return Array.prototype.slice.call(wrapper.querySelectorAll('input:checked')).map(function (box) {
         return box.value;
       });
@@ -270,9 +277,11 @@ window.App = window.App || {};
 
   /* ===== רכיבי תצוגה חוזרים ===== */
 
-  function typeBadge(type) {
-    return '<span class="badge badge--' + util.escape(type) + '">' +
-      util.escape(store.label('type', type)) + '</span>';
+  function roleBadges(cadet) {
+    return (cadet.roles || []).map(function (role) {
+      return '<span class="badge badge--' + util.escape(role) + '">' +
+        util.escape(store.label('role', role)) + '</span>';
+    }).join('');
   }
 
   function sentimentBadge(sentiment) {
@@ -368,7 +377,7 @@ window.App = window.App || {};
     openForm: openForm,
     confirm: confirm,
     toast: toast,
-    typeBadge: typeBadge,
+    roleBadges: roleBadges,
     sentimentBadge: sentimentBadge,
     dueLabel: dueLabel,
     taskRow: taskRow,

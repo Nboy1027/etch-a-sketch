@@ -95,10 +95,10 @@ window.App = window.App || {};
       return;
     }
 
-    /* צוער שמזמן לא נפגשנו איתו עולה לראש הרשימה — זה מה שהמסך נועד לחשוף. */
+    /* צוער שמזמן לא נפגשנו איתו עולה לראש הרשימה — זה מה שהמסך נועד לחשוף.
+       אצל צוער כפול קובע הפער הגדול מבין שני הערוצים. */
     var ordered = cadets.slice().sort(function (a, b) {
-      var da = daysSinceContact(a), db = daysSinceContact(b);
-      return db - da;
+      return store.longestGap(b) - store.longestGap(a);
     });
 
     section.innerHTML =
@@ -107,25 +107,8 @@ window.App = window.App || {};
       '<div class="grid grid--cadets">' + ordered.map(cadetCard).join('') + '</div>';
   }
 
-  function daysSinceContact(cadet) {
-    var contact = store.lastContact(cadet);
-    /* מי שאף פעם לא תועד נחשב לדחוף ביותר. */
-    return contact && contact.daysAgo !== null ? contact.daysAgo : Infinity;
-  }
-
   function cadetCard(cadet) {
     var summary = store.cadetSummary(cadet);
-    var contact = summary.lastContact;
-    var contactText, contactAlert;
-
-    if (!contact) {
-      contactText = cadet.type === 'officer' ? 'עוד לא הציג' : 'עוד לא נפגשתם';
-      contactAlert = true;
-    } else {
-      var prefix = cadet.type === 'officer' ? 'הציג ' : 'נפגשתם ';
-      contactText = prefix + util.relativeDays(contact.date);
-      contactAlert = contact.isStale;
-    }
 
     return '<a class="card card--link" href="#/cadet/' + util.escape(cadet.id) + '">' +
       '<div class="cadet-card__head">' +
@@ -133,7 +116,7 @@ window.App = window.App || {};
           '<div class="cadet-card__name">' + util.escape(cadet.name) + '</div>' +
           (cadet.unit ? '<div class="cadet-card__unit">' + util.escape(cadet.unit) + '</div>' : '') +
         '</div>' +
-        ui.typeBadge(cadet.type) +
+        ui.roleBadges(cadet) +
       '</div>' +
       '<div class="cadet-card__stats">' +
         '<div class="stat' + (summary.overdueTasks ? ' stat--alert' : '') + '">' +
@@ -141,14 +124,23 @@ window.App = window.App || {};
           '<span class="stat__value">' + summary.openTasks + '</span>' +
           (summary.overdueTasks ? '<span class="badge badge--danger">' + summary.overdueTasks + ' באיחור</span>' : '') +
         '</div>' +
-        '<div class="stat' + (contactAlert ? ' stat--alert' : '') + '">' +
-          '<span class="stat__value">' + util.escape(contactText) + '</span>' +
-          (contact ? ui.sentimentBadge(contact.sentiment) : '') +
-        '</div>' +
+        summary.contacts.map(contactRow).join('') +
         '<div class="stat"><span>יעדים פעילים:</span>' +
           '<span class="stat__value">' + summary.activeGoals + '</span></div>' +
       '</div>' +
     '</a>';
+  }
+
+  /* שורה לכל ערוץ תיעוד. צוער כפול מקבל שתיים, כך שפער בהצגות לא נחבא
+     מאחורי פגישה אישית שהייתה אתמול. */
+  function contactRow(record) {
+    var text = record.date
+      ? (record.role === 'officer' ? 'הציג ' : 'נפגשתם ') + util.relativeDays(record.date)
+      : (record.role === 'officer' ? 'עוד לא הציג' : 'עוד לא נפגשתם');
+    return '<div class="stat' + (record.isStale ? ' stat--alert' : '') + '">' +
+      '<span class="stat__value">' + util.escape(text) + '</span>' +
+      (record.date ? ui.sentimentBadge(record.sentiment) : '') +
+    '</div>';
   }
 
   App.screens = App.screens || {};

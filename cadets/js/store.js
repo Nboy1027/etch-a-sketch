@@ -16,7 +16,8 @@ window.App = window.App || {};
     contactDays: 14      /* "לא נפגשנו מזמן" — לשני סוגי הצוערים */
   };
 
-  var CADET_TYPES = [
+  /* צוער יכול להחזיק בשני התפקידים בו-זמנית: גם חניך אישי וגם חניך קצינותי. */
+  var CADET_ROLES = [
     { value: 'personal', label: 'אישי' },
     { value: 'officer', label: 'קצינותי' }
   ];
@@ -72,6 +73,7 @@ window.App = window.App || {};
   var data = blankData();
   var listeners = [];
   var storageAvailable = true;
+  var migrated = false;
 
   /* משלים שדות חסרים כדי שקובץ ישן או חלקי לא יפיל את המערכת. */
   function normalize(raw) {
@@ -87,6 +89,16 @@ window.App = window.App || {};
     base.groupMeetings.forEach(function (meeting) {
       if (!Array.isArray(meeting.entries)) meeting.entries = [];
     });
+    /* גיבויים מהגרסה הראשונה שמרו סוג יחיד ב-type. ממירים אותו לרשימת תפקידים. */
+    migrated = false;
+    base.cadets.forEach(function (cadet) {
+      if (cadet.type === undefined && Array.isArray(cadet.roles) && cadet.roles.length) return;
+      if (!Array.isArray(cadet.roles) || !cadet.roles.length) {
+        cadet.roles = [cadet.type === 'officer' ? 'officer' : 'personal'];
+      }
+      delete cadet.type;
+      migrated = true;
+    });
     return base;
   }
 
@@ -98,6 +110,11 @@ window.App = window.App || {};
       /* דפדפן שחוסם אחסון, או קובץ פגום — עובדים בזיכרון ומזהירים במסך ההגדרות. */
       storageAvailable = false;
       data = blankData();
+    }
+    /* כותבים את הצורה החדשה חזרה מיד, כך שגיבוי שייוצא אחר כך כבר יהיה מומר. */
+    if (migrated) {
+      migrated = false;
+      persist();
     }
   }
 
@@ -119,7 +136,7 @@ window.App = window.App || {};
 
   var store = {
     THRESHOLDS: THRESHOLDS,
-    CADET_TYPES: CADET_TYPES,
+    CADET_ROLES: CADET_ROLES,
     TASK_STATUSES: TASK_STATUSES,
     CLOSED_STATUSES: CLOSED_STATUSES,
     PRIORITIES: PRIORITIES,
@@ -146,17 +163,25 @@ window.App = window.App || {};
 
     /* ===== תוויות ===== */
     label: function (collection, value) {
-      var list = { type: CADET_TYPES, status: TASK_STATUSES, priority: PRIORITIES,
+      var list = { role: CADET_ROLES, status: TASK_STATUSES, priority: PRIORITIES,
                    sentiment: SENTIMENTS, tone: TONES, goalStatus: GOAL_STATUSES }[collection] || [];
       var found = util.byId(list.map(function (o) { return { id: o.value, label: o.label }; }), value);
       return found ? found.label : '';
     },
 
     /* ===== צוערים ===== */
+    hasRole: function (cadet, role) {
+      return !!cadet && (cadet.roles || []).indexOf(role) !== -1;
+    },
+    rolesLabel: function (cadet) {
+      return (cadet.roles || []).map(function (role) {
+        return store.label('role', role);
+      }).join(' + ');
+    },
     cadets: function (options) {
       var opts = options || {};
       return data.cadets.filter(function (cadet) {
-        if (opts.type && opts.type !== 'all' && cadet.type !== opts.type) return false;
+        if (opts.type && opts.type !== 'all' && !store.hasRole(cadet, opts.type)) return false;
         if (opts.activeOnly && cadet.active === false) return false;
         return true;
       }).sort(function (a, b) { return a.name.localeCompare(b.name, 'he'); });
@@ -196,7 +221,7 @@ window.App = window.App || {};
       var f = filters || {};
       return data.tasks.filter(function (task) {
         var cadet = store.cadet(task.cadetId);
-        if (f.type && f.type !== 'all' && (!cadet || cadet.type !== f.type)) return false;
+        if (f.type && f.type !== 'all' && !store.hasRole(cadet, f.type)) return false;
         if (f.cadetId && task.cadetId !== f.cadetId) return false;
         if (f.status && task.status !== f.status) return false;
         if (f.openOnly && CLOSED_STATUSES.indexOf(task.status) !== -1) return false;
@@ -247,7 +272,7 @@ window.App = window.App || {};
       var f = filters || {};
       return util.sortBy(data.meetings.filter(function (meeting) {
         var cadet = store.cadet(meeting.cadetId);
-        if (f.type && f.type !== 'all' && (!cadet || cadet.type !== f.type)) return false;
+        if (f.type && f.type !== 'all' && !store.hasRole(cadet, f.type)) return false;
         if (f.cadetId && meeting.cadetId !== f.cadetId) return false;
         if (f.sentiment && meeting.sentiment !== f.sentiment) return false;
         return true;
@@ -389,23 +414,33 @@ window.App = window.App || {};
       return groups;
     },
 
-    /* התיעוד האישי האחרון של צוער: פגישה אישית, או המפגש האחרון שבו הציג בפועל. */
-    lastContact: function (cadet) {
-      if (!cadet) return null;
-      var record = null;
-      if (cadet.type === 'officer') {
-        record = store.presentationsFor(cadet.id)[0] || null;
-        if (record) record = { date: record.date, sentiment: record.sentiment, kind: 'presentation' };
-      } else {
-        var meetings = store.meetings({ cadetId: cadet.id });
-        if (meetings.length) {
-          record = { date: meetings[0].date, sentiment: meetings[0].sentiment, kind: 'meeting' };
+    /* התיעוד האחרון של צוער, רשומה לכל תפקיד שהוא מחזיק בו: פגישה אישית
+       לתפקיד האישי, והמפגש האחרון שבו הציג בפועל לתפקיד הקצינותי.
+       צוער כפול מקבל שתי רשומות, כדי שפער באחד הערוצים לא ייחבא מאחורי השני. */
+    contacts: function (cadet) {
+      if (!cadet) return [];
+      return (cadet.roles || []).map(function (role) {
+        var record = { role: role, date: null, sentiment: '' };
+        var source = role === 'officer'
+          ? store.presentationsFor(cadet.id)[0]
+          : store.meetings({ cadetId: cadet.id })[0];
+        if (source) {
+          record.date = source.date;
+          record.sentiment = source.sentiment;
         }
-      }
-      if (!record) return null;
-      record.daysAgo = util.daysSince(record.date);
-      record.isStale = record.daysAgo !== null && record.daysAgo >= THRESHOLDS.contactDays;
-      return record;
+        record.daysAgo = record.date ? util.daysSince(record.date) : null;
+        /* צוער שמעולם לא תועד נחשב חורג — הוא בדיוק מי שנוטים לשכוח. */
+        record.isStale = record.daysAgo === null || record.daysAgo >= THRESHOLDS.contactDays;
+        return record;
+      });
+    },
+
+    /* הפער הגדול ביותר מבין ערוצי התיעוד של הצוער, למיון לפי דחיפות. */
+    longestGap: function (cadet) {
+      var gaps = store.contacts(cadet).map(function (record) {
+        return record.daysAgo === null ? Infinity : record.daysAgo;
+      });
+      return gaps.length ? Math.max.apply(null, gaps) : Infinity;
     },
 
     /* שורת התקציר של צוער במסך הבית. */
@@ -418,7 +453,7 @@ window.App = window.App || {};
           return t.dueDate && t.dueDate < today;
         }).length,
         activeGoals: store.goals(cadet.id).filter(function (g) { return g.status === 'active'; }).length,
-        lastContact: store.lastContact(cadet)
+        contacts: store.contacts(cadet)
       };
     },
 

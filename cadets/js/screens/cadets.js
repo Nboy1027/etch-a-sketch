@@ -25,17 +25,25 @@ window.App = window.App || {};
     var cadet = cadetId ? store.cadet(cadetId) : null;
     ui.openForm({
       title: cadet ? 'עריכת צוער' : 'צוער חדש',
-      values: cadet || { type: 'personal', active: 'true' },
+      values: cadet || { roles: ['personal'], active: 'true' },
       fields: [
         { name: 'name', label: 'שם מלא', required: true },
         [
-          { name: 'type', label: 'סוג צוער', type: 'select', options: store.CADET_TYPES },
+          {
+            name: 'roles', label: 'סוג צוער', type: 'checkgroup', required: true,
+            options: store.CADET_ROLES,
+            hint: 'אפשר לסמן את שניהם — צוער שהוא גם חניך אישי וגם חניך קצינותי.'
+          },
           { name: 'unit', label: 'כיתה / צוות' }
         ],
         [
           { name: 'phone', label: 'טלפון', type: 'tel' },
           { name: 'enlistDate', label: 'תאריך גיוס', type: 'date' }
         ],
+        { name: 'keepPoints', label: 'נקודות לשימור', type: 'textarea', rows: 3,
+          placeholder: 'מה עובד אצלו ושווה לחזק' },
+        { name: 'improvePoints', label: 'נקודות לשיפור', type: 'textarea', rows: 3,
+          placeholder: 'מה דורש עבודה' },
         { name: 'background', label: 'רקע קודם', type: 'textarea', rows: 3 },
         {
           name: 'active', label: 'סטטוס', type: 'select',
@@ -67,7 +75,7 @@ window.App = window.App || {};
       fields.push({
         name: 'cadetId', label: 'צוער', type: 'select', required: true,
         options: cadets.map(function (c) {
-          return { value: c.id, label: c.name + ' · ' + store.label('type', c.type) };
+          return { value: c.id, label: c.name + ' · ' + store.rolesLabel(c) };
         })
       });
     }
@@ -145,7 +153,7 @@ window.App = window.App || {};
               (cadet.active === false ? ' <span class="badge">לא פעיל</span>' : '') + '</div>' +
             (cadet.unit ? '<div class="cadet-card__unit">' + util.escape(cadet.unit) + '</div>' : '') +
           '</div>' +
-          ui.typeBadge(cadet.type) +
+          ui.roleBadges(cadet) +
         '</div>' +
         '<div class="cadet-card__stats">' +
           '<div class="stat"><span>משימות פתוחות:</span>' +
@@ -168,19 +176,21 @@ window.App = window.App || {};
       return;
     }
 
-    var contact = store.lastContact(cadet);
-    var contactLine = contact
-      ? (cadet.type === 'officer' ? 'הצגה אחרונה: ' : 'פגישה אחרונה: ') +
-        util.formatDate(contact.date) + ' · ' + util.relativeDays(contact.date)
-      : (cadet.type === 'officer' ? 'עוד לא הציג במפגש' : 'עוד לא נערכה פגישה אישית');
+    var contactLines = store.contacts(cadet).map(function (record) {
+      var text = record.date
+        ? (record.role === 'officer' ? 'הצגה אחרונה: ' : 'פגישה אחרונה: ') +
+          util.formatDate(record.date) + ' · ' + util.relativeDays(record.date)
+        : (record.role === 'officer' ? 'עוד לא הציג במפגש' : 'עוד לא נערכה פגישה אישית');
+      return '<div class="sub' + (record.isStale ? ' due--overdue' : '') + '">' +
+        util.escape(text) + '</div>';
+    }).join('');
 
     container.innerHTML =
       '<div class="screen-head">' +
         '<div>' +
-          '<div class="row"><h2>' + util.escape(cadet.name) + '</h2>' + ui.typeBadge(cadet.type) +
+          '<div class="row"><h2>' + util.escape(cadet.name) + '</h2>' + ui.roleBadges(cadet) +
             (cadet.active === false ? '<span class="badge">לא פעיל</span>' : '') + '</div>' +
-          '<div class="sub' + (contact && contact.isStale ? ' due--overdue' : '') + '">' +
-            util.escape(contactLine) + '</div>' +
+          contactLines +
         '</div>' +
         '<div class="btn-row">' +
           '<a class="btn btn--ghost" href="#/cadets">לרשימה</a>' +
@@ -216,7 +226,7 @@ window.App = window.App || {};
 
   function renderDetails(body, cadet) {
     var rows = [
-      ['סוג צוער', store.label('type', cadet.type)],
+      ['סוג צוער', store.rolesLabel(cadet)],
       ['כיתה / צוות', cadet.unit],
       ['טלפון', cadet.phone],
       ['תאריך גיוס', cadet.enlistDate ? util.formatDate(cadet.enlistDate) : ''],
@@ -234,6 +244,7 @@ window.App = window.App || {};
             util.escapeMultiline(cadet.background) + '</div></div>'
           : '') +
       '</div>' +
+      pointsCard(cadet) +
       '<div class="btn-row" style="margin-top:14px">' +
         '<button type="button" class="btn btn--danger btn--sm" id="delete-cadet">מחיקת הצוער</button>' +
       '</div>';
@@ -252,6 +263,26 @@ window.App = window.App || {};
         location.hash = '#/cadets';
       });
     });
+  }
+
+  /* שתי הנקודות שאני מנהל ידנית — התמונה המזוקקת שלי על הצוער,
+     נפרדת ממה שנרשם בפגישה ספציפית. */
+  function pointsCard(cadet) {
+    var blocks = [
+      ['נקודות לשימור', cadet.keepPoints, 'ok'],
+      ['נקודות לשיפור', cadet.improvePoints, 'warn']
+    ];
+    if (!cadet.keepPoints && !cadet.improvePoints) {
+      return '<div class="card" style="margin-top:14px">' +
+        '<div class="card__meta">נקודות לשימור ולשיפור</div>' +
+        '<div class="hint">עוד לא הוזנו. אפשר למלא אותן ב"עריכת פרטים".</div></div>';
+    }
+    return '<div class="stack" style="margin-top:14px">' + blocks.map(function (block) {
+      if (!block[1]) return '';
+      return '<div class="card" style="border-right:3px solid var(--' + block[2] + ')">' +
+        '<div class="card__meta">' + util.escape(block[0]) + '</div>' +
+        '<div>' + util.escapeMultiline(block[1]) + '</div></div>';
+    }).join('') + '</div>';
   }
 
   function renderTasksTab(body, cadet) {
@@ -284,70 +315,80 @@ window.App = window.App || {};
     ui.bindTaskRows(body, App.screens.tasks.openEditForm);
   }
 
-  /* לצוער אישי — פגישות אישיות. לצוער קצינותי — רישומי ההצגות שלו במפגשים. */
+  /* הכרטיס מציג את הערוצים שהצוער שייך אליהם: פגישות אישיות לתפקיד האישי,
+     רישומי ההצגות לתפקיד הקצינותי. צוער כפול מקבל את שניהם, זה מתחת לזה. */
   function renderMeetingsTab(body, cadet) {
-    if (cadet.type === 'officer') {
-      renderPresentations(body, cadet);
-      return;
-    }
+    body.innerHTML = '';
+    if (store.hasRole(cadet, 'personal')) body.appendChild(personalSection(cadet));
+    if (store.hasRole(cadet, 'officer')) body.appendChild(presentationsSection(cadet));
+  }
 
-    var meetings = store.meetings({ cadetId: cadet.id });
-    body.innerHTML =
+  function sectionHost(name, title, actionLabel, onAction) {
+    var host = document.createElement('section');
+    host.className = 'section';
+    host.dataset.section = name;
+    host.innerHTML =
+      '<div class="section__head"><h4>' + util.escape(title) + '</h4></div>' +
       '<div class="btn-row" style="margin-bottom:14px">' +
-        '<button type="button" class="btn btn--primary btn--sm" id="add-meeting">פגישה חדשה</button>' +
+        '<button type="button" class="btn btn--primary btn--sm">' + util.escape(actionLabel) + '</button>' +
       '</div>' +
-      '<div class="stack" id="meeting-list"></div>';
+      '<div class="stack"></div>';
+    host.querySelector('button').addEventListener('click', onAction);
+    host.list = host.querySelector('.stack');
+    return host;
+  }
 
-    body.querySelector('#add-meeting').addEventListener('click', function () {
+  function personalSection(cadet) {
+    var meetings = store.meetings({ cadetId: cadet.id });
+    var host = sectionHost('personal-meetings', 'פגישות אישיות', 'פגישה חדשה', function () {
       App.screens.meetings.openMeetingForm(cadet.id);
     });
 
-    var list = body.querySelector('#meeting-list');
     if (!meetings.length) {
-      list.appendChild(ui.emptyState('עוד לא תועדה פגישה', 'תעד את הפגישה האישית הראשונה.'));
-      return;
+      host.list.appendChild(ui.emptyState('עוד לא תועדה פגישה', 'תעד את הפגישה האישית הראשונה.'));
+      return host;
     }
-    list.innerHTML = meetings.map(function (meeting) {
+    host.list.innerHTML = meetings.map(function (meeting) {
       return App.screens.meetings.meetingCard(meeting);
     }).join('');
-    App.screens.meetings.bindMeetingCards(list);
+    App.screens.meetings.bindMeetingCards(host.list);
+    return host;
   }
 
-  function renderPresentations(body, cadet) {
+  function presentationsSection(cadet) {
     var entries = store.presentationsFor(cadet.id);
-    var absences = [];
-    store.groupMeetings().forEach(function (meeting) {
-      var entry = util.byId(meeting.entries.map(function (e) {
-        return { id: e.cadetId, absent: e.absent };
-      }), cadet.id);
-      if (entry && entry.absent) absences.push(meeting);
+    var absences = store.groupMeetings().filter(function (meeting) {
+      return meeting.entries.some(function (entry) {
+        return entry.cadetId === cadet.id && entry.absent;
+      });
     });
 
-    body.innerHTML =
-      '<p class="hint">צוער קצינותי מתועד דרך מפגשי הקצינות. כאן מרוכזות ההצגות שלו לאורך הזמן.</p>' +
-      '<div class="btn-row" style="margin-bottom:14px">' +
-        '<button type="button" class="btn btn--primary btn--sm" id="add-group">מפגש קצינות חדש</button>' +
-      '</div>' +
-      (absences.length
-        ? '<div class="card" style="margin-bottom:12px"><div class="card__meta">' +
-          (absences.length === 1 ? 'נעדר ממפגש אחד' : 'נעדר מ-' + absences.length + ' מפגשים') + ': ' +
-          absences.map(function (m) { return util.formatDate(m.date); }).join(', ') + '</div></div>'
-        : '') +
-      '<div class="stack" id="entry-list"></div>';
-
-    body.querySelector('#add-group').addEventListener('click', function () {
+    var host = sectionHost('presentations', 'הצגות במפגשי קצינות', 'מפגש קצינות חדש', function () {
       App.screens.meetings.openGroupMeetingEditor();
     });
 
-    var list = body.querySelector('#entry-list');
-    if (!entries.length) {
-      list.appendChild(ui.emptyState('עוד לא הציג במפגש',
-        'לאחר מפגש קצינות שבו הוא מציג, הרישום יופיע כאן.'));
-      return;
+    if (absences.length) {
+      var note = document.createElement('div');
+      note.className = 'card';
+      note.style.marginBottom = '12px';
+      note.innerHTML = '<div class="card__meta">' +
+        (absences.length === 1 ? 'נעדר ממפגש אחד' : 'נעדר מ-' + absences.length + ' מפגשים') + ': ' +
+        absences.map(function (m) { return util.formatDate(m.date); }).join(', ') + '</div>';
+      host.list.appendChild(note);
     }
+
+    if (!entries.length) {
+      host.list.appendChild(ui.emptyState('עוד לא הציג במפגש',
+        'לאחר מפגש קצינות שבו הוא מציג, הרישום יופיע כאן.'));
+      return host;
+    }
+    var list = document.createElement('div');
+    list.className = 'stack';
     list.innerHTML = entries.map(function (entry) {
       return App.screens.meetings.presentationCard(entry);
     }).join('');
+    host.list.appendChild(list);
+    return host;
   }
 
   function renderNotesTab(body, cadet) {

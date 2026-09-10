@@ -198,14 +198,17 @@ window.App = window.App || {};
     if (kind === 'cadets') {
       filename = 'cadets';
       headers = ['שם', 'סוג', 'כיתה/צוות', 'טלפון', 'תאריך גיוס', 'סטטוס',
-                 'משימות פתוחות', 'תיעוד אישי אחרון', 'רקע'];
+                 'משימות פתוחות', 'תיעוד אחרון', 'נקודות לשימור', 'נקודות לשיפור', 'רקע'];
       rows = store.cadets().map(function (cadet) {
         var summary = store.cadetSummary(cadet);
-        return [cadet.name, store.label('type', cadet.type), cadet.unit || '', cadet.phone || '',
+        return [cadet.name, store.rolesLabel(cadet), cadet.unit || '', cadet.phone || '',
           cadet.enlistDate ? util.formatDate(cadet.enlistDate) : '',
           cadet.active === false ? 'לא פעיל' : 'פעיל', summary.openTasks,
-          summary.lastContact ? util.formatDate(summary.lastContact.date) : '',
-          cadet.background || ''];
+          summary.contacts.map(function (record) {
+            return store.label('role', record.role) + ': ' +
+              (record.date ? util.formatDate(record.date) : 'אין');
+          }).join(' | '),
+          cadet.keepPoints || '', cadet.improvePoints || '', cadet.background || ''];
       });
     } else if (kind === 'tasks') {
       filename = 'tasks';
@@ -213,14 +216,14 @@ window.App = window.App || {};
                  'תאריך יעד', 'סטטוס', 'עודכן'];
       rows = store.tasks({}).map(function (task) {
         var cadet = store.cadet(task.cadetId);
-        return [store.cadetName(task.cadetId), cadet ? store.label('type', cadet.type) : '',
+        return [store.cadetName(task.cadetId), cadet ? store.rolesLabel(cadet) : '',
           task.title, task.description || '', store.label('priority', task.priority),
           task.category || '', task.dueDate ? util.formatDate(task.dueDate) : '',
           store.label('status', task.status), util.formatDate((task.updatedAt || '').slice(0, 10))];
       });
     } else {
       filename = 'meetings';
-      headers = ['תאריך', 'צוער', 'סוג תיעוד', 'נושאים / מה הציג', 'חוזקות',
+      headers = ['תאריך', 'צוער', 'סוג תיעוד', 'נושאים / מה הציג', 'נקודות לשימור',
                  'נקודות לשיפור', 'סיכומים לפעם הבאה', 'תחושה כללית', 'מלל חופשי'];
       rows = [];
       store.meetings({}).forEach(function (meeting) {

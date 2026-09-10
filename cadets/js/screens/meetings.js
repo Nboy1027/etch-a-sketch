@@ -14,7 +14,7 @@ window.App = window.App || {};
   /* שדות התבנית, זהים לפגישה אישית ולהצגה במפגש — כדי שאפשר יהיה להשוות בין הסוגים. */
   var TEMPLATE = [
     { key: 'topics', label: 'נושאים שעלו בשיחה', presentedLabel: 'מה הציג' },
-    { key: 'strengths', label: 'חוזקות' },
+    { key: 'strengths', label: 'נקודות לשימור' },
     { key: 'improvements', label: 'נקודות לשיפור' },
     { key: 'followups', label: 'סיכומים לפעם הבאה' }
   ];
@@ -23,7 +23,7 @@ window.App = window.App || {};
 
   function openMeetingForm(cadetId, meetingId) {
     var meeting = meetingId ? store.meeting(meetingId) : null;
-    var personal = store.cadets({ activeOnly: true }).filter(function (c) { return c.type === 'personal'; });
+    var personal = store.cadets({ type: 'personal', activeOnly: true });
 
     if (!cadetId && !personal.length) {
       ui.toast('אין צוערים אישיים. צוערים קצינותיים מתועדים דרך מפגש קצינות.');
@@ -142,7 +142,7 @@ window.App = window.App || {};
 
   function openGroupMeetingEditor(meetingId) {
     var existing = meetingId ? store.groupMeeting(meetingId) : null;
-    var officers = store.cadets({ activeOnly: true }).filter(function (c) { return c.type === 'officer'; });
+    var officers = store.cadets({ type: 'officer', activeOnly: true });
 
     if (!existing && !officers.length) {
       ui.toast('אין צוערים קצינותיים פעילים');
@@ -265,7 +265,7 @@ window.App = window.App || {};
           '<textarea id="gm-presented" rows="3" placeholder="ההתקדמות בקצינות שהוצגה">' +
           util.escape(entry.presented || '') + '</textarea></div>' +
         '<div class="field-row">' +
-          '<div class="field"><label for="gm-strengths">חוזקות</label>' +
+          '<div class="field"><label for="gm-strengths">נקודות לשימור</label>' +
             '<textarea id="gm-strengths" rows="2">' + util.escape(entry.strengths || '') + '</textarea></div>' +
           '<div class="field"><label for="gm-improvements">נקודות לשיפור</label>' +
             '<textarea id="gm-improvements" rows="2">' + util.escape(entry.improvements || '') + '</textarea></div>' +
@@ -363,7 +363,7 @@ window.App = window.App || {};
   }
 
   function renderPersonal(body, context) {
-    var personal = store.cadets().filter(function (c) { return c.type === 'personal'; });
+    var personal = store.cadets({ type: 'personal' });
 
     body.innerHTML =
       '<div class="filters">' +
@@ -388,18 +388,21 @@ window.App = window.App || {};
       App.render();
     });
 
-    /* הלשונית הזו היא כולה של צוערים אישיים, ולכן מסננת לפי הסוג ולא לפי בחירת הכותרת. */
+    /* הלשונית מציגה פגישות אישיות בלבד, אך עדיין מכבדת את מסנן הכותרת:
+       בחירת "קצינותיים" משאירה רק צוערים כפולים — כאלה שהם גם אישיים. */
     var meetings = store.meetings({
-      type: 'personal',
+      type: context.type,
       cadetId: personalFilters.cadetId,
       sentiment: personalFilters.sentiment
+    }).filter(function (meeting) {
+      return store.hasRole(store.cadet(meeting.cadetId), 'personal');
     });
 
     var list = body.querySelector('#pm-list');
     if (!meetings.length) {
       list.appendChild(ui.emptyState('אין פגישות בתצוגה',
         context.type === 'officer'
-          ? 'הסינון בראש המסך מוגבל לצוערים קצינותיים, והם מתועדים בלשונית מפגשי קצינות.'
+          ? 'הסינון בראש המסך מוגבל לצוערים קצינותיים. פגישה אישית תופיע כאן רק לצוער שהוא גם אישי וגם קצינותי — השאר מתועדים בלשונית מפגשי קצינות.'
           : 'תעד פגישה אישית ראשונה.'));
       return;
     }
