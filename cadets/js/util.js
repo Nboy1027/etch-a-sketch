@@ -133,6 +133,38 @@ window.App = window.App || {};
       return util.formatDate(key);
     },
 
+    /* הדפדפן אינו חושף את שם המכשיר, ולכן מנחשים ממנו כיוון כללי בלבד.
+       המשתמש יכול לדרוס את הניחוש בהגדרות. */
+    detectDevice: function () {
+      var ua = navigator.userAgent || '';
+      if (/iPad/.test(ua)) return 'iPad';
+      if (/iPhone/.test(ua)) return 'iPhone';
+      if (/Android/.test(ua)) return 'Android';
+      if (/Macintosh/.test(ua)) return 'Mac';
+      if (/Windows/.test(ua)) return 'Windows';
+      if (/Linux/.test(ua)) return 'Linux';
+      return 'מכשיר';
+    },
+
+    /* חותמת זמן לשם קובץ: "2026-09-14 14-30" — ממוינת נכון ובטוחה לכל מערכת קבצים. */
+    fileStamp: function (date) {
+      var d = date || new Date();
+      return util.toISODate(d) + ' ' +
+        String(d.getHours()).padStart(2, '0') + '-' + String(d.getMinutes()).padStart(2, '0');
+    },
+
+    /* Chromium מתעלם מתכונת download כשהשם מכיל תווים שאינם ASCII, והקובץ
+       יורד בשם "download" בלי סיומת. לכן שם של הורדה מקומית עובר ניקוי;
+       שם הקובץ בדרייב נשלח דרך ה-API ואינו מוגבל כך. */
+    asciiName: function (value, fallback) {
+      var cleaned = String(value || '')
+        .replace(/[^\x20-\x7E]/g, ' ')
+        .replace(/[\\/:*?"<>|]/g, '-')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return cleaned || fallback || '';
+    },
+
     downloadFile: function (filename, content, mime) {
       var blob = new Blob([content], { type: (mime || 'text/plain') + ';charset=utf-8' });
       var url = URL.createObjectURL(blob);

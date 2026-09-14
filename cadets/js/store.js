@@ -7,6 +7,10 @@ window.App = window.App || {};
   var util = App.util;
 
   var STORAGE_KEY = 'cadets-management';
+  /* הגדרות ששייכות למכשיר ולא לנתונים: שם המכשיר ומזהה ה-OAuth.
+     הן נשמרות בנפרד ואינן חלק מהגיבוי — אחרת ייבוא מהנייד היה הופך את
+     המחשב ל"iPhone" בכל גיבוי הבא. */
+  var DEVICE_KEY = 'cadets-management-device';
   var SCHEMA_VERSION = 1;
 
   /* ספי ההתרעה מהאפיון. מרוכזים כאן כדי שיהיה מקום אחד לשנות בו. */
@@ -92,6 +96,7 @@ window.App = window.App || {};
   }
 
   var data = blankData();
+  var deviceSettings = { deviceName: '', driveClientId: '' };
   var listeners = [];
   var storageAvailable = true;
   var migrated = false;
@@ -127,7 +132,26 @@ window.App = window.App || {};
     return base;
   }
 
+  function loadDevice() {
+    try {
+      var raw = localStorage.getItem(DEVICE_KEY);
+      var parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === 'object') deviceSettings = Object.assign(deviceSettings, parsed);
+    } catch (err) {
+      /* אחסון חסום — נשארים עם ברירות המחדל */
+    }
+  }
+
+  function persistDevice() {
+    try {
+      localStorage.setItem(DEVICE_KEY, JSON.stringify(deviceSettings));
+    } catch (err) {
+      storageAvailable = false;
+    }
+  }
+
   function load() {
+    loadDevice();
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
       data = normalize(raw ? JSON.parse(raw) : null);
@@ -180,6 +204,7 @@ window.App = window.App || {};
       listeners.forEach(function (fn) { fn(); });
     },
     STORAGE_KEY: STORAGE_KEY,
+    DEVICE_KEY: DEVICE_KEY,
     subscribe: function (fn) { listeners.push(fn); },
     isStorageAvailable: function () { return storageAvailable; },
 
@@ -189,6 +214,13 @@ window.App = window.App || {};
 
     getSetting: function (key) { return data.settings[key]; },
     setSetting: function (key, value) { data.settings[key] = value; emit(); },
+
+    /* הגדרות מכשיר — מחוץ לגיבוי, ולכן שורדות ייבוא. */
+    getDevice: function (key) { return deviceSettings[key] || ''; },
+    setDevice: function (key, value) {
+      deviceSettings[key] = value;
+      persistDevice();
+    },
 
     /* ===== תוויות ===== */
     label: function (collection, value) {

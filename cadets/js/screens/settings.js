@@ -40,11 +40,51 @@ window.App = window.App || {};
       '</section>' +
 
       '<section class="section">' +
-        '<div class="section__head"><h3>גיבוי והעברה בין מכשירים</h3></div>' +
+        '<div class="section__head"><h3>גיבוי לגוגל דרייב</h3></div>' +
         '<div class="card stack">' +
-          '<p class="hint">המידע נשמר בדפדפן שבו הוא נוצר בלבד. כדי לעבוד גם מהנייד, ' +
-            'ייצא קובץ גיבוי כאן וייבא אותו במכשיר השני. שמור גיבוי אחת לתקופה — ' +
-            'ניקוי נתוני האתרים בדפדפן מוחק את המידע.</p>' +
+          '<div id="drive-status"></div>' +
+          '<div class="field">' +
+            '<label for="drive-client">מזהה OAuth (Client ID)</label>' +
+            '<input id="drive-client" class="ltr" type="text" dir="ltr" spellcheck="false" ' +
+              'placeholder="1234-abc.apps.googleusercontent.com" value="' +
+              util.escape(store.getDevice('driveClientId')) + '">' +
+            '<div class="field__hint">נוצר בפרויקט Google Cloud שלך. ההוראות המלאות בהמשך הדף.</div>' +
+          '</div>' +
+          '<div class="field">' +
+            '<label for="drive-device">שם המכשיר הזה</label>' +
+            '<input id="drive-device" type="text" placeholder="' + util.escape(util.detectDevice()) + '" value="' +
+              util.escape(store.getDevice('deviceName')) + '">' +
+            '<div class="field__hint">מופיע בשם קובץ הגיבוי, כדי שתדע מאיזה מכשיר הוא נוצר. ' +
+              'ריק — ייעשה שימוש בזיהוי האוטומטי.</div>' +
+          '</div>' +
+          '<div class="btn-row">' +
+            '<button type="button" class="btn btn--primary" id="drive-export">ייצוא לדרייב</button>' +
+            '<button type="button" class="btn" id="drive-import">ייבוא מהדרייב</button>' +
+            '<button type="button" class="btn btn--ghost" id="drive-disconnect">ניתוק</button>' +
+          '</div>' +
+          '<div class="field__hint" id="drive-name-preview"></div>' +
+        '</div>' +
+        '<details class="card" style="margin-top:12px">' +
+          '<summary style="cursor:pointer;font-weight:600">איך יוצרים את מזהה ה-OAuth (פעם אחת)</summary>' +
+          '<ol style="margin:10px 0 0;padding-inline-start:20px;line-height:1.9">' +
+            '<li>היכנס ל-<a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> וצור פרויקט חדש.</li>' +
+            '<li>ב-<b>APIs &amp; Services → Library</b> חפש <b>Google Drive API</b> ולחץ Enable.</li>' +
+            '<li>ב-<b>OAuth consent screen</b> בחר <b>External</b>, מלא שם ואימייל, ובשלב <b>Test users</b> הוסף את כתובת הגוגל שלך.</li>' +
+            '<li>ב-<b>Credentials → Create credentials → OAuth client ID</b> בחר <b>Web application</b>, ותחת <b>Authorized JavaScript origins</b> הוסף בדיוק: <code class="ltr">https://nboy1027.github.io</code></li>' +
+            '<li>העתק את ה-Client ID והדבק אותו בשדה למעלה.</li>' +
+          '</ol>' +
+          '<p class="hint" style="margin-top:10px">ההרשאה המבוקשת היא <code class="ltr">drive.file</code> — הצרה ביותר: ' +
+            'האתר רואה רק קבצים שהוא עצמו יצר, ולא את שאר הדרייב שלך. לכן חשוב לתת לאתר ליצור את ' +
+            'התיקייה "ניהול צוערים" בעצמו ולא ליצור אותה ידנית.</p>' +
+        '</details>' +
+      '</section>' +
+
+      '<section class="section">' +
+        '<div class="section__head"><h3>גיבוי מקומי לקובץ</h3></div>' +
+        '<div class="card stack">' +
+          '<p class="hint">גיבוי ישירות לקובץ במכשיר, ללא תלות בחיבור לגוגל. ' +
+            'שימושי כשאין אינטרנט, או כגיבוי נוסף לצד הדרייב. שם הקובץ כאן באנגלית בלבד — ' +
+            'דפדפנים מתעלמים משם הורדה שמכיל עברית ומורידים אותו בשם "download".</p>' +
           '<div class="btn-row">' +
             '<button type="button" class="btn btn--primary" id="export-json">ייצוא גיבוי מלא (JSON)</button>' +
             '<button type="button" class="btn" id="import-json">ייבוא מקובץ גיבוי</button>' +
@@ -85,7 +125,7 @@ window.App = window.App || {};
       '</section>';
 
     container.querySelector('#export-json').addEventListener('click', function () {
-      util.downloadFile('cadets-backup-' + util.today() + '.json', store.exportJSON(), 'application/json');
+      util.downloadFile(App.drive.localBackupName(), store.exportJSON(), 'application/json');
       ui.toast('קובץ הגיבוי הורד');
     });
 
@@ -124,6 +164,7 @@ window.App = window.App || {};
     });
 
     renderCategories(container);
+    wireDrive(container);
 
     container.querySelector('#wipe').addEventListener('click', function () {
       ui.confirm({
@@ -145,6 +186,94 @@ window.App = window.App || {};
         ui.toast('כל הנתונים נמחקו');
         location.hash = '#/home';
       });
+    });
+  }
+
+  /* ===== גוגל דרייב ===== */
+
+  function wireDrive(container) {
+    var drive = App.drive;
+    var status = container.querySelector('#drive-status');
+    var preview = container.querySelector('#drive-name-preview');
+
+    function refresh() {
+      if (!drive.isConfigured()) {
+        status.innerHTML = '<div class="card__meta">לא מוגדר — הזן מזהה OAuth כדי להפעיל את הגיבוי לדרייב.</div>';
+      } else if (drive.isConnected()) {
+        status.innerHTML = '<div class="all-clear">מחובר לגוגל דרייב.</div>';
+      } else {
+        status.innerHTML = '<div class="card__meta">מוגדר. החיבור לגוגל יתבצע בפעולה הראשונה שתבצע.</div>';
+      }
+      preview.textContent = 'שם הקובץ הבא: ' + drive.backupName();
+    }
+
+    container.querySelector('#drive-client').addEventListener('change', function (event) {
+      store.setDevice('driveClientId', event.target.value.trim());
+      drive.disconnect();
+      refresh();
+      ui.toast('המזהה נשמר');
+    });
+
+    container.querySelector('#drive-device').addEventListener('change', function (event) {
+      store.setDevice('deviceName', event.target.value.trim());
+      refresh();
+      ui.toast('שם המכשיר נשמר');
+    });
+
+    container.querySelector('#drive-disconnect').addEventListener('click', function () {
+      drive.disconnect();
+      refresh();
+      ui.toast('החיבור נותק במכשיר הזה');
+    });
+
+    container.querySelector('#drive-export').addEventListener('click', function (event) {
+      var button = event.currentTarget;
+      run(button, 'מעלה...', drive.upload().then(function (file) {
+        refresh();
+        ui.toast('הגיבוי הועלה: ' + file.name);
+      }));
+    });
+
+    container.querySelector('#drive-import').addEventListener('click', function (event) {
+      var button = event.currentTarget;
+      run(button, 'מחפש...', drive.latest().then(function (file) {
+        if (!file) {
+          throw new Error('לא נמצא גיבוי בתיקיית "' + drive.FOLDER_NAME + '" בדרייב. ' +
+            'ייתכן שעדיין לא ייצאת ממכשיר כלשהו.');
+        }
+        return ui.confirm({
+          title: 'ייבוא מהדרייב',
+          message: 'הקובץ האחרון בתיקייה הוא:\n' + file.name + '\n\n' +
+            'הייבוא ידרוס את כל המידע שקיים כרגע במכשיר הזה. להמשיך?',
+          confirmLabel: 'ייבוא ודריסה',
+          danger: true
+        }).then(function (confirmed) {
+          if (!confirmed) return;
+          return drive.download(file.id).then(function (text) {
+            store.importJSON(text);
+            ui.toast('יובא מהדרייב: ' + file.name);
+          });
+        });
+      }));
+    });
+
+    refresh();
+  }
+
+  /* מנטרל את הכפתור בזמן פעולת רשת, ומציג שגיאה קריאה אם היא נכשלה. */
+  function run(button, busyLabel, promise) {
+    var original = button.textContent;
+    button.disabled = true;
+    button.textContent = busyLabel;
+    promise.catch(function (err) {
+      ui.openModal({
+        title: 'הפעולה נכשלה',
+        content: '<p>' + util.escapeMultiline(err && err.message ? err.message : String(err)) + '</p>',
+        buttons: [{ label: 'סגירה', className: 'btn--primary', onClick: function (m) { m.close(); } }]
+      });
+    }).then(function () {
+      button.disabled = false;
+      button.textContent = original;
     });
   }
 

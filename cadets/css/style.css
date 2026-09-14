@@ -281,6 +281,11 @@ select.status-select {
 .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .spacer { flex: 1; }
 .muted { color: var(--text-soft); }
+/* מזהים וכתובות חייבים להיקרא משמאל לימין גם בתוך עמוד RTL,
+   אחרת הם מוצגים הפוך והמשתמש מעתיק אותם שגוי. */
+.ltr { direction: ltr; unicode-bidi: isolate; text-align: left; }
+code.ltr { display: inline-block; }
+
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 @media (max-width: 560px) {
