@@ -41,6 +41,7 @@ window.App = window.App || {};
       close: function () {
         var index = openModals.indexOf(handle);
         if (index === -1) return;
+        if (App.speech) App.speech.stop();
         openModals.splice(index, 1);
         backdrop.remove();
         if (typeof options.onClose === 'function') options.onClose();
@@ -60,6 +61,9 @@ window.App = window.App || {};
     backdrop.addEventListener('mousedown', function (event) {
       if (event.target === backdrop) handle.close();
     });
+
+    /* כל טופס במערכת נפתח במודאל, ולכן זו הנקודה היחידה שצריך לצייד במיקרופון. */
+    if (App.speech) App.speech.decorate(body);
 
     root().appendChild(backdrop);
     openModals.push(handle);

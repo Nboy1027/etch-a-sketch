@@ -320,3 +320,29 @@ code.ltr { display: inline-block; }
   .app-nav a { padding: 9px 8px; font-size: 13px; }
   .app-header__inner { padding: 0 12px; }
 }
+
+/* ===== Voice dictation ===== */
+.mic-wrap { position: relative; display: block; }
+.mic-wrap > input, .mic-wrap > textarea { padding-inline-end: 42px; }
+
+.mic-btn {
+  position: absolute; inset-inline-end: 6px; top: 6px;
+  width: 30px; height: 30px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--text-faint); cursor: pointer;
+}
+.mic-btn:hover { background: var(--surface-2); color: var(--text); }
+.mic-btn.is-recording {
+  background: var(--danger-soft); border-color: var(--danger); color: var(--danger);
+  animation: mic-pulse 1.4s ease-in-out infinite;
+}
+.mic-wrap--area .mic-btn { top: auto; bottom: 8px; }
+
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mic-btn.is-recording { animation: none; }
+}

@@ -38,6 +38,7 @@ js/util.js          עזרי תאריכים, טקסט וקבצים
 js/store.js         שכבת הנתונים: CRUD, נגזרות (ספי התרעה), ייצוא/ייבוא
 js/ui.js            מודאל, בונה טפסים, אישורים ורכיבי תצוגה חוזרים
 js/app.js           ניתוב לפי hash ומסנן סוג הצוער הגלובלי
+js/speech.js        הכתבה קולית בעברית לשדות טקסט
 js/screens/         מסך לכל קובץ: home, cadets, tasks, meetings, goals, settings
 ```
 

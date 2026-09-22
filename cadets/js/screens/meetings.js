@@ -282,6 +282,8 @@ window.App = window.App || {};
             '<textarea id="gm-free" rows="2">' + util.escape(entry.freeText || '') + '</textarea></div>' +
         '</div>';
 
+      if (App.speech) App.speech.decorate(fields);
+
       [['#gm-presented', 'presented'], ['#gm-strengths', 'strengths'],
        ['#gm-improvements', 'improvements'], ['#gm-followups', 'followups'],
        ['#gm-sentiment', 'sentiment'], ['#gm-free', 'freeText']].forEach(function (pair) {

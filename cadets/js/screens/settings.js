@@ -45,7 +45,7 @@ window.App = window.App || {};
           '<div id="drive-status"></div>' +
           '<div class="field">' +
             '<label for="drive-client">מזהה OAuth (Client ID)</label>' +
-            '<input id="drive-client" class="ltr" type="text" dir="ltr" spellcheck="false" ' +
+            '<input id="drive-client" class="ltr" type="text" dir="ltr" spellcheck="false" data-no-mic ' +
               'placeholder="1234-abc.apps.googleusercontent.com" value="' +
               util.escape(store.getDevice('driveClientId')) + '">' +
             '<div class="field__hint">נוצר בפרויקט Google Cloud שלך. ההוראות המלאות בהמשך הדף.</div>' +
