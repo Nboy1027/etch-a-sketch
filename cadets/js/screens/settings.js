@@ -326,12 +326,12 @@ window.App = window.App || {};
 
     if (kind === 'cadets') {
       filename = 'cadets';
-      headers = ['שם', 'סוג', 'כיתה/צוות', 'טלפון', 'תאריך גיוס', 'סטטוס',
+      headers = ['שם', 'סוג', 'כיתה/צוות', 'קצינות', 'סטטוס',
                  'משימות פתוחות', 'תיעוד אחרון', 'נקודות לשימור', 'נקודות לשיפור', 'רקע'];
       rows = store.cadets().map(function (cadet) {
         var summary = store.cadetSummary(cadet);
-        return [cadet.name, store.rolesLabel(cadet), cadet.unit || '', cadet.phone || '',
-          cadet.enlistDate ? util.formatDate(cadet.enlistDate) : '',
+        return [cadet.name, store.rolesLabel(cadet), cadet.unit || '',
+          cadet.trackId ? store.trackName(cadet.trackId) : '',
           cadet.active === false ? 'לא פעיל' : 'פעיל', summary.openTasks,
           summary.contacts.map(function (record) {
             return store.label('role', record.role) + ': ' +
@@ -345,7 +345,8 @@ window.App = window.App || {};
                  'תאריך יעד', 'סטטוס', 'עודכן'];
       rows = store.tasks({}).map(function (task) {
         var cadet = store.cadet(task.cadetId);
-        return [store.cadetName(task.cadetId), cadet ? store.rolesLabel(cadet) : '',
+        return [task.trackId ? 'קצינות ' + store.trackName(task.trackId) : store.cadetName(task.cadetId),
+          task.trackId ? 'קצינותי' : (cadet ? store.rolesLabel(cadet) : ''),
           task.title, task.description || '', store.label('priority', task.priority),
           task.category || '', task.dueDate ? util.formatDate(task.dueDate) : '',
           store.label('status', task.status), util.formatDate((task.updatedAt || '').slice(0, 10))];

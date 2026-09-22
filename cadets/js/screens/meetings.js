@@ -331,6 +331,201 @@ window.App = window.App || {};
     return !!(entry.presented || entry.strengths || entry.improvements || entry.followups || entry.freeText);
   }
 
+  /* ===== פא"ן קצינות =====
+     פגישה עם קצינות אחת: תבנית משותפת לקבוצה, ומתחתיה שורה אישית לכל חבר.
+     הקבוצה קטנה, ולכן הכול על מסך אחד בלי ניווט בין משתתפים. */
+
+  function openTrackMeetingEditor(meetingId, trackId) {
+    var existing = meetingId ? store.trackMeeting(meetingId) : null;
+    var track = store.track(trackId || (existing && existing.trackId));
+    if (!track) {
+      ui.toast('לא נבחרה קצינות');
+      return;
+    }
+
+    var draft = existing
+      ? JSON.parse(JSON.stringify(existing))
+      : { trackId: track.id, date: util.today(), sentiment: 'good', entries: [] };
+
+    var members = store.trackMembers(track.id, { activeOnly: true });
+    draft.entries.forEach(function (entry) {
+      if (!util.byId(members, entry.cadetId)) {
+        var cadet = store.cadet(entry.cadetId);
+        if (cadet) members.push(cadet);
+      }
+    });
+    members.forEach(function (cadet) {
+      if (!entryFor(draft, cadet.id)) {
+        draft.entries.push({ cadetId: cadet.id, absent: false, text: '', sentiment: 'good' });
+      }
+    });
+
+    var saveTimer = null;
+    var dirty = false;
+    function scheduleSave() {
+      dirty = true;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(commit, 400);
+    }
+    function commit() {
+      if (!dirty) return;
+      clearTimeout(saveTimer);
+      draft.id = store.saveTrackMeeting(draft);
+      dirty = false;
+      status.textContent = 'נשמר · ' +
+        new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    var content = document.createElement('div');
+    content.className = 'form';
+    content.innerHTML =
+      '<div class="field-row">' +
+        '<div class="field"><label for="tm-date">תאריך</label>' +
+          '<input type="date" id="tm-date" value="' + util.escape(draft.date) + '"></div>' +
+        '<div class="field"><label for="tm-sentiment">תחושה כללית מהפגישה</label>' +
+          '<select id="tm-sentiment">' + store.SENTIMENTS.map(function (option) {
+            return '<option value="' + option.value + '"' +
+              (option.value === draft.sentiment ? ' selected' : '') + '>' + option.label + '</option>';
+          }).join('') + '</select></div>' +
+      '</div>' +
+      '<div class="field__hint" id="tm-status">נשמר אוטומטית תוך כדי הקלדה</div>' +
+      TEMPLATE.map(function (field) {
+        return '<div class="field"><label for="tm-' + field.key + '">' + field.label + '</label>' +
+          '<textarea id="tm-' + field.key + '" rows="2">' +
+          util.escape(draft[field.key] || '') + '</textarea></div>';
+      }).join('') +
+      '<div class="field"><label for="tm-free">מלל חופשי</label>' +
+        '<textarea id="tm-free" rows="2">' + util.escape(draft.freeText || '') + '</textarea></div>' +
+      '<div class="section__head" style="margin-top:6px"><h4>לכל חבר בנפרד</h4></div>' +
+      '<div id="tm-members"></div>';
+
+    var status = content.querySelector('#tm-status');
+
+    content.querySelector('#tm-date').addEventListener('input', function (event) {
+      draft.date = event.target.value; scheduleSave();
+    });
+    content.querySelector('#tm-sentiment').addEventListener('change', function (event) {
+      draft.sentiment = event.target.value; scheduleSave();
+    });
+    TEMPLATE.concat([{ key: 'freeText', id: 'free' }]).forEach(function (field) {
+      var node = content.querySelector('#tm-' + (field.id || field.key));
+      node.addEventListener('input', function (event) {
+        draft[field.key] = event.target.value; scheduleSave();
+      });
+    });
+
+    var host = content.querySelector('#tm-members');
+    if (!members.length) {
+      host.innerHTML = '<p class="hint">אין חברים פעילים בקצינות הזו. ' +
+        'שייך צוערים אליה דרך "עריכת פרטים" בכרטיס הצוער.</p>';
+    } else {
+      host.innerHTML = '<div class="stack">' + members.map(function (cadet) {
+        var entry = entryFor(draft, cadet.id);
+        return '<div class="card stack" data-member="' + util.escape(cadet.id) + '">' +
+          '<div class="row">' +
+            '<strong>' + util.escape(cadet.name) + '</strong>' +
+            '<span class="spacer"></span>' +
+            '<label class="picker__item"><input type="checkbox" data-absent' +
+              (entry.absent ? ' checked' : '') + '><span>נעדר</span></label>' +
+          '</div>' +
+          '<div class="field"><textarea rows="2" data-text placeholder="מה שראוי לציין עליו מהפגישה">' +
+            util.escape(entry.text || '') + '</textarea></div>' +
+          '<div class="field"><label>תחושה</label><select data-sentiment>' +
+            store.SENTIMENTS.map(function (option) {
+              return '<option value="' + option.value + '"' +
+                (option.value === entry.sentiment ? ' selected' : '') + '>' + option.label + '</option>';
+            }).join('') + '</select></div>' +
+        '</div>';
+      }).join('') + '</div>';
+
+      host.querySelectorAll('[data-member]').forEach(function (card) {
+        var entry = entryFor(draft, card.dataset.member);
+        var text = card.querySelector('[data-text]');
+        var absent = card.querySelector('[data-absent]');
+        var sentiment = card.querySelector('[data-sentiment]');
+        text.addEventListener('input', function () { entry.text = text.value; scheduleSave(); });
+        sentiment.addEventListener('change', function () { entry.sentiment = sentiment.value; scheduleSave(); });
+        absent.addEventListener('change', function () {
+          entry.absent = absent.checked;
+          text.disabled = absent.checked;
+          sentiment.disabled = absent.checked;
+          scheduleSave();
+        });
+        text.disabled = entry.absent;
+        sentiment.disabled = entry.absent;
+      });
+    }
+
+    if (App.speech) App.speech.decorate(content);
+
+    ui.openModal({
+      title: (existing ? 'עריכת פא"ן · ' : 'פא"ן חדש · ') + track.name,
+      content: content,
+      wide: true,
+      onClose: commit,
+      buttons: [{
+        label: 'סיום', className: 'btn--primary',
+        onClick: function (modal) {
+          commit();
+          modal.close();
+          activeTab = 'track';
+          App.render();
+          ui.toast('הפא"ן נשמר');
+        }
+      }]
+    });
+  }
+
+  function trackMeetingCard(meeting) {
+    var present = meeting.entries.filter(function (e) { return !e.absent; });
+    var absent = meeting.entries.filter(function (e) { return e.absent; });
+    return '<div class="card">' +
+      '<div class="row">' +
+        '<span class="card__title">' + util.formatDate(meeting.date) + '</span>' +
+        '<a href="#/track/' + util.escape(meeting.trackId) + '">' +
+          util.escape(store.trackName(meeting.trackId)) + '</a>' +
+        ui.sentimentBadge(meeting.sentiment) +
+        (absent.length ? '<span class="badge badge--warn">' + absent.length + ' נעדרו</span>' : '') +
+        '<span class="spacer"></span>' +
+        '<button type="button" class="btn btn--sm btn--ghost" data-tm-edit="' +
+          util.escape(meeting.id) + '">עריכה</button>' +
+        '<button type="button" class="btn btn--sm btn--ghost" data-tm-delete="' +
+          util.escape(meeting.id) + '">מחיקה</button>' +
+      '</div>' +
+      templateBlocks(meeting) +
+      present.filter(function (entry) { return entry.text; }).map(function (entry) {
+        return '<div style="margin-top:8px"><div class="card__meta">' +
+          '<a href="#/cadet/' + util.escape(entry.cadetId) + '">' +
+          util.escape(store.cadetName(entry.cadetId)) + '</a> ' +
+          ui.sentimentBadge(entry.sentiment) + '</div>' +
+          '<div>' + util.escapeMultiline(entry.text) + '</div></div>';
+      }).join('') +
+      (absent.length
+        ? '<div class="card__meta" style="margin-top:8px">נעדרו: ' +
+          absent.map(function (e) { return util.escape(store.cadetName(e.cadetId)); }).join(', ') + '</div>'
+        : '') +
+    '</div>';
+  }
+
+  function bindTrackMeetingCards(container) {
+    container.querySelectorAll('[data-tm-edit]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        openTrackMeetingEditor(button.dataset.tmEdit);
+      });
+    });
+    container.querySelectorAll('[data-tm-delete]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        ui.confirm({ title: 'מחיקת פא"ן', message: 'למחוק את תיעוד הפגישה?',
+          confirmLabel: 'מחיקה', danger: true })
+          .then(function (confirmed) {
+            if (!confirmed) return;
+            store.deleteTrackMeeting(button.dataset.tmDelete);
+            ui.toast('הפא"ן נמחק');
+          });
+      });
+    });
+  }
+
   /* ===== מסך הפגישות ===== */
 
   function render(container, context) {
@@ -340,6 +535,7 @@ window.App = window.App || {};
         '<div class="btn-row">' +
           '<button type="button" class="btn" id="new-meeting">פגישה אישית</button>' +
           '<button type="button" class="btn btn--primary" id="new-group">מפגש קצינות</button>' +
+          '<button type="button" class="btn btn--primary" id="new-track-meeting">פא"ן</button>' +
         '</div>' +
       '</div>' +
       '<div class="tabs">' +
@@ -347,11 +543,14 @@ window.App = window.App || {};
           '" data-mtab="personal">פגישות אישיות</button>' +
         '<button type="button" class="tab' + (activeTab === 'group' ? ' is-active' : '') +
           '" data-mtab="group">מפגשי קצינות</button>' +
+        '<button type="button" class="tab' + (activeTab === 'track' ? ' is-active' : '') +
+          '" data-mtab="track">פא"ן קצינויות</button>' +
       '</div>' +
       '<div id="meetings-body"></div>';
 
     container.querySelector('#new-meeting').addEventListener('click', function () { openMeetingForm(null); });
     container.querySelector('#new-group').addEventListener('click', function () { openGroupMeetingEditor(); });
+    container.querySelector('#new-track-meeting').addEventListener('click', function () { chooseTrack(); });
     container.querySelectorAll('[data-mtab]').forEach(function (button) {
       button.addEventListener('click', function () {
         activeTab = button.dataset.mtab;
@@ -361,7 +560,45 @@ window.App = window.App || {};
 
     var body = container.querySelector('#meetings-body');
     if (activeTab === 'personal') renderPersonal(body, context);
+    else if (activeTab === 'track') renderTrackList(body);
     else renderGroupList(body);
+  }
+
+  /* פא"ן תמיד שייך לקצינות אחת, ולכן בוחרים אותה לפני שנפתח העורך. */
+  function chooseTrack() {
+    var tracks = store.tracks({ activeOnly: true });
+    if (!tracks.length) {
+      ui.toast('אין קצינויות פעילות. הוסף קצינות במסך הצוערים.');
+      return;
+    }
+    if (tracks.length === 1) {
+      openTrackMeetingEditor(null, tracks[0].id);
+      return;
+    }
+    ui.openForm({
+      title: 'פא"ן חדש',
+      submitLabel: 'המשך',
+      values: { trackId: tracks[0].id },
+      fields: [{
+        name: 'trackId', label: 'קצינות', type: 'select', required: true,
+        options: tracks.map(function (track) { return { value: track.id, label: track.name }; })
+      }],
+      onSubmit: function (result) { openTrackMeetingEditor(null, result.trackId); }
+    });
+  }
+
+  function renderTrackList(body) {
+    var meetings = store.trackMeetings();
+    body.innerHTML = '<div class="stack" id="tm-list"></div>';
+    var list = body.querySelector('#tm-list');
+    if (!meetings.length) {
+      list.appendChild(ui.emptyState('אין פא"נים',
+        'פא"ן הוא פגישה עם קצינות אחת: תוכן משותף לקבוצה, ובתוכו שורה אישית לכל חבר.',
+        'פא"ן חדש', chooseTrack));
+      return;
+    }
+    list.innerHTML = meetings.map(trackMeetingCard).join('');
+    bindTrackMeetingCards(list);
   }
 
   function renderPersonal(body, context) {
@@ -529,6 +766,9 @@ window.App = window.App || {};
     openGroupMeetingEditor: openGroupMeetingEditor,
     meetingCard: meetingCard,
     bindMeetingCards: bindMeetingCards,
-    presentationCard: presentationCard
+    presentationCard: presentationCard,
+    openTrackMeetingEditor: openTrackMeetingEditor,
+    trackMeetingCard: trackMeetingCard,
+    bindTrackMeetingCards: bindTrackMeetingCards
   };
 })(window.App);

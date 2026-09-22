@@ -36,10 +36,14 @@ window.App = window.App || {};
           },
           { name: 'unit', label: 'כיתה / צוות' }
         ],
-        [
-          { name: 'phone', label: 'טלפון', type: 'tel' },
-          { name: 'enlistDate', label: 'תאריך גיוס', type: 'date' }
-        ],
+        {
+          name: 'trackId', label: 'קצינות', type: 'select',
+          options: [{ value: '', label: 'ללא שיוך' }].concat(store.tracks({ activeOnly: true }).map(function (track) {
+            return { value: track.id, label: track.name };
+          })),
+          showWhen: { field: 'roles', value: 'officer' },
+          hint: 'הצוות בעולם הקצינות. הפגישות, המשימות והיעדים שלו מוגדרים לקבוצה כולה.'
+        },
         { name: 'keepPoints', label: 'נקודות לשימור', type: 'textarea', rows: 3,
           placeholder: 'מה עובד אצלו ושווה לחזק' },
         { name: 'improvePoints', label: 'נקודות לשיפור', type: 'textarea', rows: 3,
@@ -120,12 +124,41 @@ window.App = window.App || {};
 
   /* ===== רשימת הצוערים ===== */
 
+  var listTab = 'cadets';
+
   function renderList(container, context) {
+    container.innerHTML =
+      '<div class="screen-head"><div><h2>צוערים וקצינויות</h2></div></div>' +
+      '<div class="tabs">' +
+        '<button type="button" class="tab' + (listTab === 'cadets' ? ' is-active' : '') +
+          '" data-ltab="cadets">צוערים</button>' +
+        '<button type="button" class="tab' + (listTab === 'tracks' ? ' is-active' : '') +
+          '" data-ltab="tracks">קצינויות</button>' +
+      '</div>' +
+      '<div id="list-body"></div>';
+
+    container.querySelectorAll('[data-ltab]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        listTab = button.dataset.ltab;
+        App.render();
+      });
+    });
+
+    var body = container.querySelector('#list-body');
+    if (listTab === 'tracks') {
+      App.screens.tracks.renderList(body);
+      return;
+    }
+    renderCadetList(body, context);
+  }
+
+  function renderCadetList(container, context) {
     var cadets = store.cadets({ type: context.type });
 
     container.innerHTML =
-      '<div class="screen-head">' +
-        '<div><h2>צוערים</h2><div class="sub">' + cadets.length + ' בתצוגה</div></div>' +
+      '<div class="btn-row" style="margin-bottom:14px">' +
+        '<div class="muted">' + cadets.length + ' בתצוגה</div>' +
+        '<span class="spacer"></span>' +
         '<button type="button" class="btn btn--primary" id="add-cadet">צוער חדש</button>' +
       '</div>' +
       '<div class="grid grid--cadets" id="cadet-grid"></div>';
@@ -176,9 +209,10 @@ window.App = window.App || {};
 
     var contactLines = store.contacts(cadet).map(function (record) {
       var text = record.date
-        ? (record.role === 'officer' ? 'הצגה אחרונה: ' : 'פגישה אחרונה: ') +
+        ? (record.role !== 'officer' ? 'פגישה אחרונה: '
+          : record.source === 'trackMeeting' ? 'פא"ן אחרון: ' : 'הצגה אחרונה: ') +
           util.formatDate(record.date) + ' · ' + util.relativeDays(record.date)
-        : (record.role === 'officer' ? 'עוד לא הציג במפגש' : 'עוד לא נערכה פגישה אישית');
+        : (record.role === 'officer' ? 'עוד לא הציג ולא היה בפא"ן' : 'עוד לא נערכה פגישה אישית');
       return '<div class="sub' + (record.isStale ? ' due--overdue' : '') + '">' +
         util.escape(text) + '</div>';
     }).join('');
@@ -226,8 +260,7 @@ window.App = window.App || {};
     var rows = [
       ['סוג צוער', store.rolesLabel(cadet)],
       ['כיתה / צוות', cadet.unit],
-      ['טלפון', cadet.phone],
-      ['תאריך גיוס', cadet.enlistDate ? util.formatDate(cadet.enlistDate) : ''],
+      ['קצינות', cadet.trackId ? store.trackName(cadet.trackId) : ''],
       ['סטטוס', cadet.active === false ? 'לא פעיל' : 'פעיל']
     ].filter(function (row) { return row[1]; });
 
@@ -284,7 +317,8 @@ window.App = window.App || {};
   }
 
   function renderTasksTab(body, cadet) {
-    var tasks = util.sortBy(store.tasks({ cadetId: cadet.id }), function (t) { return t.dueDate; });
+    var tasks = util.sortBy(store.tasks({ cadetId: cadet.id, includeTrack: true }),
+      function (t) { return t.dueDate; });
     var open = tasks.filter(store.isOpen);
     var closed = tasks.filter(function (t) { return !store.isOpen(t); });
 
@@ -318,7 +352,37 @@ window.App = window.App || {};
   function renderMeetingsTab(body, cadet) {
     body.innerHTML = '';
     if (store.hasRole(cadet, 'personal')) body.appendChild(personalSection(cadet));
-    if (store.hasRole(cadet, 'officer')) body.appendChild(presentationsSection(cadet));
+    if (store.hasRole(cadet, 'officer')) {
+      if (cadet.trackId) body.appendChild(trackMeetingSection(cadet));
+      body.appendChild(presentationsSection(cadet));
+    }
+  }
+
+  /* מה שנכתב עליו אישית בפא"נים של הקצינות שלו. */
+  function trackMeetingSection(cadet) {
+    var entries = store.trackNotesFor(cadet.id);
+    var host = sectionHost('track-meetings', 'פא"ן ' + store.trackName(cadet.trackId), 'פא"ן חדש', function () {
+      App.screens.meetings.openTrackMeetingEditor(null, cadet.trackId);
+    });
+
+    if (!entries.length) {
+      host.list.appendChild(ui.emptyState('עוד לא נכתב עליו בפא"ן',
+        'פא"ן הוא פגישה עם הקצינות כולה, ובתוכה שורה אישית לכל חבר.'));
+      return host;
+    }
+    host.list.innerHTML = entries.map(function (entry) {
+      return '<div class="card">' +
+        '<div class="row">' +
+          '<span class="card__title">' + util.formatDate(entry.date) + '</span>' +
+          '<span class="badge badge--officer">פא"ן</span>' +
+          ui.sentimentBadge(entry.sentiment) +
+          '<span class="spacer"></span>' +
+          '<a class="btn btn--sm btn--ghost" href="#/track/' + util.escape(entry.trackId) + '">לקצינות</a>' +
+        '</div>' +
+        (entry.text ? '<div style="margin-top:6px">' + util.escapeMultiline(entry.text) + '</div>' : '') +
+      '</div>';
+    }).join('');
+    return host;
   }
 
   function sectionHost(name, title, actionLabel, onAction) {

@@ -102,10 +102,12 @@ window.App = window.App || {};
   function blankData() {
     return {
       schemaVersion: SCHEMA_VERSION,
+      tracks: [],
       cadets: [],
       tasks: [],
       meetings: [],
       groupMeetings: [],
+      trackMeetings: [],
       notes: [],
       goals: [],
       categories: ['מקצועי', 'אישי', 'מנהלתי'],
@@ -123,7 +125,8 @@ window.App = window.App || {};
   function normalize(raw) {
     var base = blankData();
     if (!raw || typeof raw !== 'object') return base;
-    ['cadets', 'tasks', 'meetings', 'groupMeetings', 'notes', 'goals'].forEach(function (key) {
+    ['tracks', 'cadets', 'tasks', 'meetings', 'groupMeetings', 'trackMeetings',
+      'notes', 'goals'].forEach(function (key) {
       if (Array.isArray(raw[key])) base[key] = raw[key];
     });
     if (Array.isArray(raw.categories) && raw.categories.length) base.categories = raw.categories;
@@ -131,6 +134,9 @@ window.App = window.App || {};
       base.settings = Object.assign(base.settings, raw.settings);
     }
     base.groupMeetings.forEach(function (meeting) {
+      if (!Array.isArray(meeting.entries)) meeting.entries = [];
+    });
+    base.trackMeetings.forEach(function (meeting) {
       if (!Array.isArray(meeting.entries)) meeting.entries = [];
     });
     base.goals.forEach(function (goal) {
@@ -257,6 +263,52 @@ window.App = window.App || {};
       return found ? found.label : '';
     },
 
+    /* ===== קצינויות =====
+       קצינות היא צוות בעולם הקצינות — סיורים, מחשוב ואמצעים וכדומה.
+       הפגישות, המשימות והיעדים שלה מוגדרים לקבוצה כולה. */
+    tracks: function (options) {
+      var opts = options || {};
+      return data.tracks.filter(function (track) {
+        if (opts.activeOnly && track.active === false) return false;
+        return true;
+      }).sort(function (a, b) { return a.name.localeCompare(b.name, 'he'); });
+    },
+    track: function (id) { return util.byId(data.tracks, id); },
+    trackName: function (id) {
+      var track = store.track(id);
+      return track ? track.name : 'קצינות שנמחקה';
+    },
+    saveTrack: function (track) {
+      var existing = track.id ? store.track(track.id) : null;
+      if (existing) {
+        Object.assign(existing, track);
+      } else {
+        track.id = util.uid();
+        track.createdAt = util.now();
+        if (track.active === undefined) track.active = true;
+        data.tracks.push(track);
+      }
+      emit();
+      return track.id;
+    },
+    /* מחיקת קצינות אינה מוחקת את הצוערים שבה — רק משחררת אותם ממנה. */
+    deleteTrack: function (id) {
+      data.tracks = data.tracks.filter(function (t) { return t.id !== id; });
+      data.cadets.forEach(function (cadet) {
+        if (cadet.trackId === id) cadet.trackId = '';
+      });
+      data.tasks = data.tasks.filter(function (t) { return t.trackId !== id; });
+      data.goals = data.goals.filter(function (g) { return g.trackId !== id; });
+      data.trackMeetings = data.trackMeetings.filter(function (m) { return m.trackId !== id; });
+      emit();
+    },
+    trackMembers: function (trackId, options) {
+      var opts = options || {};
+      return store.cadets({ activeOnly: opts.activeOnly }).filter(function (cadet) {
+        return cadet.trackId === trackId && store.hasRole(cadet, 'officer');
+      });
+    },
+
     /* ===== צוערים ===== */
     hasRole: function (cadet, role) {
       return !!cadet && (cadet.roles || []).indexOf(role) !== -1;
@@ -294,10 +346,13 @@ window.App = window.App || {};
     },
     deleteCadet: function (id) {
       data.cadets = data.cadets.filter(function (c) { return c.id !== id; });
-      data.tasks = data.tasks.filter(function (t) { return t.cadetId !== id; });
+      data.tasks = data.tasks.filter(function (t) { return t.trackId || t.cadetId !== id; });
       data.meetings = data.meetings.filter(function (m) { return m.cadetId !== id; });
       data.notes = data.notes.filter(function (n) { return n.cadetId !== id; });
-      data.goals = data.goals.filter(function (g) { return g.cadetId !== id; });
+      data.goals = data.goals.filter(function (g) { return g.trackId || g.cadetId !== id; });
+      data.trackMeetings.forEach(function (meeting) {
+        meeting.entries = meeting.entries.filter(function (e) { return e.cadetId !== id; });
+      });
       data.groupMeetings.forEach(function (meeting) {
         meeting.entries = meeting.entries.filter(function (e) { return e.cadetId !== id; });
       });
@@ -309,8 +364,17 @@ window.App = window.App || {};
       var f = filters || {};
       return data.tasks.filter(function (task) {
         var cadet = store.cadet(task.cadetId);
-        if (f.type && f.type !== 'all' && !store.hasRole(cadet, f.type)) return false;
-        if (f.cadetId && task.cadetId !== f.cadetId) return false;
+        /* משימת קצינות שייכת לעולם הקצינות, ולכן נכללת בסינון "קצינותיים". */
+        if (f.type && f.type !== 'all') {
+          if (task.trackId ? f.type !== 'officer' : !store.hasRole(cadet, f.type)) return false;
+        }
+        if (f.trackId && task.trackId !== f.trackId) return false;
+        if (f.trackOnly && !task.trackId) return false;
+        if (f.cadetOnly && task.trackId) return false;
+        /* משימת קצינות היא גם משימה של כל חבר בה. */
+        if (f.cadetId && task.cadetId !== f.cadetId &&
+            !(task.trackId && f.includeTrack && store.cadet(f.cadetId) &&
+              store.cadet(f.cadetId).trackId === task.trackId)) return false;
         if (f.status && task.status !== f.status) return false;
         if (f.openOnly && CLOSED_STATUSES.indexOf(task.status) !== -1) return false;
         if (f.priority && task.priority !== f.priority) return false;
@@ -321,6 +385,25 @@ window.App = window.App || {};
       });
     },
     task: function (id) { return util.byId(data.tasks, id); },
+    /* משימת קצינות היא משימה אחת עם סטטוס משותף לכל הקבוצה. */
+    createTrackTask: function (draft, trackId) {
+      var stamp = util.now();
+      data.tasks.push({
+        id: util.uid(),
+        trackId: trackId,
+        cadetId: '',
+        title: draft.title,
+        description: draft.description || '',
+        priority: draft.priority || 'medium',
+        category: draft.category || '',
+        dueDate: draft.dueDate || '',
+        status: draft.status || 'open',
+        createdAt: stamp,
+        updatedAt: stamp
+      });
+      emit();
+    },
+
     /* הטלה לכמה צוערים יוצרת מופע נפרד לכל אחד, מקושרים ב-groupId משותף. */
     createTasks: function (draft, cadetIds) {
       var groupId = cadetIds.length > 1 ? util.uid() : null;
@@ -421,6 +504,47 @@ window.App = window.App || {};
       return util.sortBy(result, function (e) { return e.date; }, 'desc');
     },
 
+    /* ===== פא"ן קצינות =====
+       פגישה עם קצינות אחת: תוכן משותף לקבוצה, ובתוכו שורה אישית לכל חבר. */
+    trackMeetings: function (trackId) {
+      return util.sortBy(data.trackMeetings.filter(function (meeting) {
+        return !trackId || meeting.trackId === trackId;
+      }), function (m) { return m.date; }, 'desc');
+    },
+    trackMeeting: function (id) { return util.byId(data.trackMeetings, id); },
+    saveTrackMeeting: function (meeting) {
+      var existing = meeting.id ? store.trackMeeting(meeting.id) : null;
+      if (existing) {
+        Object.assign(existing, meeting);
+      } else {
+        meeting.id = util.uid();
+        meeting.createdAt = util.now();
+        data.trackMeetings.push(meeting);
+      }
+      emit();
+      return meeting.id;
+    },
+    deleteTrackMeeting: function (id) {
+      data.trackMeetings = data.trackMeetings.filter(function (m) { return m.id !== id; });
+      emit();
+    },
+    /* השורות האישיות שנכתבו על צוער מסוים בפא"ן, לאורך הזמן. */
+    trackNotesFor: function (cadetId) {
+      var result = [];
+      data.trackMeetings.forEach(function (meeting) {
+        meeting.entries.forEach(function (entry) {
+          if (entry.cadetId !== cadetId || entry.absent) return;
+          if (!entry.text && !entry.sentiment) return;
+          result.push(Object.assign({}, entry, {
+            trackMeetingId: meeting.id,
+            trackId: meeting.trackId,
+            date: meeting.date
+          }));
+        });
+      });
+      return util.sortBy(result, function (e) { return e.date; }, 'desc');
+    },
+
     /* ===== הערות שוטפות ===== */
     notes: function (cadetId) {
       return util.sortBy(data.notes.filter(function (n) {
@@ -449,9 +573,15 @@ window.App = window.App || {};
     goals: function (cadetId, options) {
       var opts = options || {};
       return util.sortBy(data.goals.filter(function (goal) {
-        if (cadetId && goal.cadetId !== cadetId) return false;
+        if (cadetId && (goal.cadetId !== cadetId || goal.trackId)) return false;
+        if (opts.trackId && goal.trackId !== opts.trackId) return false;
+        if (opts.trackOnly && !goal.trackId) return false;
+        if (opts.cadetOnly && goal.trackId) return false;
         if (opts.kind && goal.kind !== opts.kind) return false;
-        if (opts.type && opts.type !== 'all' && !store.hasRole(store.cadet(goal.cadetId), opts.type)) return false;
+        if (opts.type && opts.type !== 'all') {
+          if (goal.trackId ? opts.type !== 'officer'
+            : !store.hasRole(store.cadet(goal.cadetId), opts.type)) return false;
+        }
         if (opts.activeOnly && goal.status !== 'active') return false;
         return true;
       }), function (goal) { return goal.targetDate; });
@@ -571,12 +701,24 @@ window.App = window.App || {};
       if (!cadet) return [];
       return (cadet.roles || []).map(function (role) {
         var record = { role: role, date: null, sentiment: '' };
-        var source = role === 'officer'
-          ? store.presentationsFor(cadet.id)[0]
-          : store.meetings({ cadetId: cadet.id })[0];
+        var source;
+        if (role === 'officer') {
+          /* בעולם הקצינות נחשבים שני סוגי המפגשים — ההצגה במפגש הגדול
+             והשורה האישית בפא"ן. הקובע הוא המאוחר מביניהם. */
+          var officerRecords = store.presentationsFor(cadet.id).map(function (r) {
+            return Object.assign({}, r, { source: 'presentation' });
+          }).concat(store.trackNotesFor(cadet.id).map(function (r) {
+            return Object.assign({}, r, { source: 'trackMeeting' });
+          }));
+          source = util.sortBy(officerRecords, function (r) { return r.date; }, 'desc')[0];
+        } else {
+          source = store.meetings({ cadetId: cadet.id })[0];
+        }
         if (source) {
           record.date = source.date;
           record.sentiment = source.sentiment;
+          /* שני סוגי מפגש מזינים את התפקיד הקצינותי, ולכן נשמר איזה מהם קבע. */
+          record.source = source.source || 'meeting';
         }
         record.daysAgo = record.date ? util.daysSince(record.date) : null;
         /* צוער שמעולם לא תועד נחשב חורג — הוא בדיוק מי שנוטים לשכוח. */
@@ -595,7 +737,7 @@ window.App = window.App || {};
 
     /* שורת התקציר של צוער במסך הבית. */
     cadetSummary: function (cadet) {
-      var open = store.tasks({ cadetId: cadet.id, openOnly: true });
+      var open = store.tasks({ cadetId: cadet.id, openOnly: true, includeTrack: true });
       var today = util.today();
       return {
         openTasks: open.length,
@@ -607,17 +749,34 @@ window.App = window.App || {};
       };
     },
 
+    trackSummary: function (track) {
+      var open = store.tasks({ trackId: track.id, openOnly: true });
+      var today = util.today();
+      var meetings = store.trackMeetings(track.id);
+      var last = meetings[0] || null;
+      var daysAgo = last ? util.daysSince(last.date) : null;
+      return {
+        members: store.trackMembers(track.id, { activeOnly: true }).length,
+        openTasks: open.length,
+        overdueTasks: open.filter(function (t) { return t.dueDate && t.dueDate < today; }).length,
+        activeGoals: store.goals(null, { trackId: track.id, activeOnly: true }).length,
+        lastMeeting: last ? { date: last.date, sentiment: last.sentiment } : null,
+        daysAgo: daysAgo,
+        isStale: daysAgo === null || daysAgo >= THRESHOLDS.contactDays
+      };
+    },
+
     /* אירועי הצוער ברצף כרונולוגי אחד, לציר הזמן שבכרטיס. */
     timeline: function (cadetId) {
       var events = [];
       var cadet = store.cadet(cadetId);
       if (!cadet) return events;
 
-      store.tasks({ cadetId: cadetId }).forEach(function (task) {
+      store.tasks({ cadetId: cadetId, includeTrack: true }).forEach(function (task) {
         events.push({
           date: (task.createdAt || '').slice(0, 10),
           kind: 'task',
-          title: 'משימה הוטלה: ' + task.title,
+          title: (task.trackId ? 'משימת קצינות: ' : 'משימה הוטלה: ') + task.title,
           detail: task.dueDate ? 'יעד: ' + util.formatDate(task.dueDate) : '',
           status: task.status
         });
@@ -629,6 +788,15 @@ window.App = window.App || {};
           title: 'פגישה אישית',
           detail: meeting.topics || meeting.freeText || '',
           sentiment: meeting.sentiment
+        });
+      });
+      store.trackNotesFor(cadetId).forEach(function (entry) {
+        events.push({
+          date: entry.date,
+          kind: 'trackMeeting',
+          title: 'פא"ן ' + store.trackName(entry.trackId),
+          detail: entry.text || '',
+          sentiment: entry.sentiment
         });
       });
       store.presentationsFor(cadetId).forEach(function (entry) {

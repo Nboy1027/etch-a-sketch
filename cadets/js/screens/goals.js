@@ -13,21 +13,38 @@ window.App = window.App || {};
 
   /* ===== טופס היעד ===== */
 
-  function openGoalForm(cadetId, goalId) {
+  function openGoalForm(cadetId, goalId, trackId) {
     var goal = goalId ? store.goal(goalId) : null;
     var cadets = store.cadets({ activeOnly: true });
-    if (!cadetId && !cadets.length) {
-      ui.toast('צריך להוסיף צוער אחד לפחות');
+    var tracks = store.tracks({ activeOnly: true });
+    var owner = trackId || (goal && goal.trackId) ? 'track' : 'cadet';
+
+    if (!cadetId && !trackId && !goal && !cadets.length && !tracks.length) {
+      ui.toast('צריך להוסיף צוער או קצינות');
       return;
     }
 
     var fields = [];
-    if (!cadetId && !goal) {
+    /* מהדאשבורד בוחרים את הבעלים; מתוך כרטיס הוא כבר ידוע. */
+    if (!cadetId && !trackId && !goal) {
+      fields.push({
+        name: 'owner', label: 'למי היעד', type: 'select',
+        options: [{ value: 'cadet', label: 'צוער' }, { value: 'track', label: 'קצינות שלמה' }]
+      });
       fields.push({
         name: 'cadetId', label: 'צוער', type: 'select', required: true,
+        showWhen: { field: 'owner', value: 'cadet' },
         options: cadets.map(function (c) {
           return { value: c.id, label: c.name + ' · ' + store.rolesLabel(c) };
         })
+      });
+      fields.push({
+        name: 'trackId', label: 'קצינות', type: 'select', required: true,
+        showWhen: { field: 'owner', value: 'track' },
+        options: [{ value: '', label: 'בחר קצינות' }].concat(tracks.map(function (track) {
+          return { value: track.id, label: track.name };
+        })),
+        hint: 'יעד של קצינות נמדד על הקבוצה כולה — סימון אחד לכל תקופה.'
       });
     }
     fields.push({ name: 'title', label: 'היעד', required: true, placeholder: 'לאן אנחנו חותרים' });
@@ -59,16 +76,19 @@ window.App = window.App || {};
     });
 
     var values = goal
-      ? Object.assign({}, goal, { recurringStatus: goal.status })
-      : { kind: 'once', status: 'active', recurringStatus: 'active', frequency: 'weekly', targetDate: '' };
+      ? Object.assign({}, goal, { recurringStatus: goal.status, owner: owner })
+      : { kind: 'once', status: 'active', recurringStatus: 'active', frequency: 'weekly',
+          targetDate: '', owner: 'cadet' };
 
     ui.openForm({
       title: goal ? 'עריכת יעד' : 'יעד חדש',
       values: values,
       fields: fields,
       onSubmit: function (result) {
+        var toTrack = trackId || (goal && goal.trackId) || (result.owner === 'track' && result.trackId);
         var saved = {
-          cadetId: cadetId || (goal && goal.cadetId) || result.cadetId,
+          trackId: toTrack || '',
+          cadetId: toTrack ? '' : (cadetId || (goal && goal.cadetId) || result.cadetId),
           title: result.title,
           description: result.description,
           kind: result.kind
@@ -206,8 +226,9 @@ window.App = window.App || {};
   /* מרנדר את היעדים של צוער אחד לתוך מכולה, ומחבר את כל האירועים. */
   function renderGoalsInto(host, cadetId, options) {
     var opts = options || {};
-    var recurring = store.goals(cadetId, { kind: 'recurring' });
-    var once = store.goals(cadetId, { kind: 'once' });
+    var scope = opts.trackId ? { trackId: opts.trackId } : {};
+    var recurring = store.goals(cadetId, Object.assign({ kind: 'recurring' }, scope));
+    var once = store.goals(cadetId, Object.assign({ kind: 'once' }, scope));
 
     if (opts.pendingOnly) {
       recurring = recurring.filter(function (goal) {
@@ -255,7 +276,7 @@ window.App = window.App || {};
     container.querySelectorAll('[data-goal-edit]').forEach(function (button) {
       button.addEventListener('click', function () {
         var goal = store.goal(button.dataset.goalEdit);
-        openGoalForm(goal.cadetId, goal.id);
+        openGoalForm(goal.cadetId, goal.id, goal.trackId);
       });
     });
     container.querySelectorAll('[data-goal-delete]').forEach(function (button) {
@@ -284,6 +305,7 @@ window.App = window.App || {};
     var cadets = store.cadets({ type: type }).filter(function (cadet) {
       return store.goals(cadet.id).length;
     });
+    var hasTrackGoals = type !== 'personal' && store.goals(null, { trackOnly: true }).length > 0;
 
     container.innerHTML =
       '<div class="screen-head">' +
@@ -317,7 +339,7 @@ window.App = window.App || {};
         })
       : cadets;
 
-    if (!shown.length) {
+    if (!shown.length && !hasTrackGoals) {
       body.appendChild(ui.emptyState(
         pendingOnly ? 'אין יעדים שממתינים לסימון' : 'אין יעדים בתצוגה',
         pendingOnly
@@ -335,6 +357,27 @@ window.App = window.App || {};
       var pb = awaiting.filter(function (g) { return g.cadetId === b.id; }).length;
       if (pa !== pb) return pb - pa;
       return a.name.localeCompare(b.name, 'he');
+    });
+
+    var tracks = type === 'personal' ? [] : store.tracks().filter(function (track) {
+      return store.goals(null, { trackId: track.id }).length;
+    });
+
+    tracks.forEach(function (track) {
+      var pending = awaiting.filter(function (g) { return g.trackId === track.id; }).length;
+      var section = document.createElement('section');
+      section.className = 'section';
+      section.dataset.track = track.id;
+      section.innerHTML =
+        '<div class="section__head">' +
+          '<h3><a href="#/track/' + util.escape(track.id) + '">' + util.escape(track.name) + '</a></h3>' +
+          '<span class="badge badge--officer">קצינות</span>' +
+          (pending ? '<span class="badge badge--warn">' + pending + ' ממתינים לסימון</span>' : '') +
+        '</div>' +
+        '<div class="goal-host"></div>';
+      body.appendChild(section);
+      renderGoalsInto(section.querySelector('.goal-host'), null,
+        { trackId: track.id, pendingOnly: pendingOnly });
     });
 
     shown.forEach(function (cadet) {

@@ -38,6 +38,7 @@ window.App = window.App || {};
         '</div>' +
       '</div>' +
       '<section class="section" id="attention"></section>' +
+      '<section class="section" id="tracks"></section>' +
       '<section class="section" id="overview"></section>';
 
     container.querySelector('#quick-task').addEventListener('click', function () {
@@ -48,6 +49,7 @@ window.App = window.App || {};
     });
 
     renderAttention(container.querySelector('#attention'), type);
+    renderTracks(container.querySelector('#tracks'), type);
     renderOverview(container.querySelector('#overview'), cadets);
   }
 
@@ -86,6 +88,49 @@ window.App = window.App || {};
       }).join('');
 
     ui.bindTaskRows(section, App.screens.tasks.openEditForm);
+  }
+
+  /* הקצינויות מוצגות בנפרד: פגישה, משימה או יעד שלהן שייכים לקבוצה,
+     ולא לאף צוער בודד, ולכן פער שלהן לא ייראה בכרטיסי הצוערים. */
+  function renderTracks(section, type) {
+    if (type === 'personal') { section.innerHTML = ''; return; }
+    var tracks = store.tracks({ activeOnly: true });
+    if (!tracks.length) { section.innerHTML = ''; return; }
+
+    var ordered = tracks.slice().sort(function (a, b) {
+      var da = store.trackSummary(a).daysAgo, db = store.trackSummary(b).daysAgo;
+      return (db === null ? Infinity : db) - (da === null ? Infinity : da);
+    });
+
+    section.innerHTML =
+      '<div class="section__head"><h3>קצינויות</h3>' +
+        '<span class="section__count">' + tracks.length + '</span></div>' +
+      '<div class="grid grid--cadets">' + ordered.map(function (track) {
+        var summary = store.trackSummary(track);
+        return '<a class="card card--link" href="#/track/' + util.escape(track.id) + '">' +
+          '<div class="cadet-card__head">' +
+            '<div><div class="cadet-card__name">' + util.escape(track.name) + '</div></div>' +
+            '<span class="badge badge--officer">' +
+              util.plural(summary.members, 'חבר אחד', 'חברים') + '</span>' +
+          '</div>' +
+          '<div class="cadet-card__stats">' +
+            '<div class="stat' + (summary.overdueTasks ? ' stat--alert' : '') + '">' +
+              '<span>משימות פתוחות:</span>' +
+              '<span class="stat__value">' + summary.openTasks + '</span>' +
+              (summary.overdueTasks ? '<span class="badge badge--danger">' +
+                summary.overdueTasks + ' באיחור</span>' : '') +
+            '</div>' +
+            '<div class="stat' + (summary.isStale ? ' stat--alert' : '') + '">' +
+              '<span class="stat__value">' + util.escape(summary.lastMeeting
+                ? 'פא"ן ' + util.relativeDays(summary.lastMeeting.date)
+                : 'עוד לא נערך פא"ן') + '</span>' +
+              (summary.lastMeeting ? ui.sentimentBadge(summary.lastMeeting.sentiment) : '') +
+            '</div>' +
+            '<div class="stat"><span>יעדים פעילים:</span>' +
+              '<span class="stat__value">' + summary.activeGoals + '</span></div>' +
+          '</div>' +
+        '</a>';
+      }).join('') + '</div>';
   }
 
   function renderOverview(section, cadets) {
@@ -135,8 +180,9 @@ window.App = window.App || {};
      מאחורי פגישה אישית שהייתה אתמול. */
   function contactRow(record) {
     var text = record.date
-      ? (record.role === 'officer' ? 'הציג ' : 'נפגשתם ') + util.relativeDays(record.date)
-      : (record.role === 'officer' ? 'עוד לא הציג' : 'עוד לא נפגשתם');
+      ? (record.role !== 'officer' ? 'נפגשתם '
+        : record.source === 'trackMeeting' ? 'פא"ן ' : 'הציג ') + util.relativeDays(record.date)
+      : (record.role === 'officer' ? 'עוד לא הציג ולא היה בפא"ן' : 'עוד לא נפגשתם');
     return '<div class="stat' + (record.isStale ? ' stat--alert' : '') + '">' +
       '<span class="stat__value">' + util.escape(text) + '</span>' +
       (record.date ? ui.sentimentBadge(record.sentiment) : '') +

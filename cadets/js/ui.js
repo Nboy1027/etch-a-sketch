@@ -246,7 +246,10 @@ window.App = window.App || {};
         if (!controller) return;
         var current = readField(controller, byName[field.showWhen.field]);
         var expected = [].concat(field.showWhen.value);
-        wrappers[field.name].hidden = expected.indexOf(current) === -1;
+        var matched = Array.isArray(current)
+          ? current.some(function (value) { return expected.indexOf(value) !== -1; })
+          : expected.indexOf(current) !== -1;
+        wrappers[field.name].hidden = !matched;
       });
     }
 
@@ -350,8 +353,12 @@ window.App = window.App || {};
       '<div class="task__body">' +
         '<div class="task__title' + (closed ? ' is-done' : '') + '">' + util.escape(task.title) + '</div>' +
         '<div class="task__meta">' +
-          (opts.showCadet && cadet
-            ? '<a href="#/cadet/' + util.escape(cadet.id) + '">' + util.escape(cadet.name) + '</a>' : '') +
+          (task.trackId
+            ? '<a href="#/track/' + util.escape(task.trackId) + '">' +
+              util.escape(store.trackName(task.trackId)) + '</a>' +
+              '<span class="badge badge--officer">משימת קצינות</span>'
+            : (opts.showCadet && cadet
+              ? '<a href="#/cadet/' + util.escape(cadet.id) + '">' + util.escape(cadet.name) + '</a>' : '')) +
           '<span class="badge badge--' + util.escape(task.priority) + '">' +
             util.escape(store.label('priority', task.priority)) + '</span>' +
           (task.category ? '<span class="badge">' + util.escape(task.category) + '</span>' : '') +

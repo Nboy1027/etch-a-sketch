@@ -21,12 +21,13 @@ window.App = window.App || {};
   function openCreateForm(defaults) {
     var values = Object.assign({
       title: '', description: '', priority: 'medium', category: '',
-      dueDate: '', cadetIds: []
+      dueDate: '', cadetIds: [], owner: 'cadets', trackId: ''
     }, defaults || {});
 
     var cadets = store.cadets({ activeOnly: true });
-    if (!cadets.length) {
-      ui.toast('צריך להוסיף צוער אחד לפחות לפני שמטילים משימה');
+    var tracks = store.tracks({ activeOnly: true });
+    if (!cadets.length && !tracks.length) {
+      ui.toast('צריך להוסיף צוער או קצינות לפני שמטילים משימה');
       return;
     }
 
@@ -43,19 +44,40 @@ window.App = window.App || {};
         ],
         { name: 'dueDate', label: 'תאריך יעד', type: 'date' },
         {
+          name: 'owner', label: 'על מי מוטלת המשימה', type: 'select',
+          options: [
+            { value: 'cadets', label: 'צוערים' },
+            { value: 'track', label: 'קצינות שלמה' }
+          ]
+        },
+        {
           name: 'cadetIds', label: 'צוערים', type: 'cadet-picker', required: true,
-          options: cadets,
+          options: cadets, showWhen: { field: 'owner', value: 'cadets' },
           hint: 'בחירה של כמה צוערים יוצרת לכל אחד מהם משימה נפרדת, כדי שאפשר יהיה לעקוב אחרי כל אחד בנפרד.'
+        },
+        {
+          name: 'trackId', label: 'קצינות', type: 'select', required: true,
+          options: [{ value: '', label: 'בחר קצינות' }].concat(tracks.map(function (track) {
+            return { value: track.id, label: track.name };
+          })),
+          showWhen: { field: 'owner', value: 'track' },
+          hint: 'משימה אחת עם סטטוס משותף לכל חברי הקצינות.'
         }
       ],
       onSubmit: function (result) {
-        store.createTasks({
+        var draft = {
           title: result.title,
           description: result.description,
           priority: result.priority,
           category: result.category,
           dueDate: result.dueDate
-        }, result.cadetIds);
+        };
+        if (result.owner === 'track') {
+          store.createTrackTask(draft, result.trackId);
+          ui.toast('המשימה הוטלה על ' + store.trackName(result.trackId));
+          return;
+        }
+        store.createTasks(draft, result.cadetIds);
         ui.toast(result.cadetIds.length > 1
           ? 'המשימה הוטלה על ' + result.cadetIds.length + ' צוערים'
           : 'המשימה נוספה');
@@ -76,10 +98,10 @@ window.App = window.App || {};
         category: task.category,
         dueDate: task.dueDate,
         status: task.status,
-        cadet: store.cadetName(task.cadetId)
+        cadet: task.trackId ? 'קצינות ' + store.trackName(task.trackId) : store.cadetName(task.cadetId)
       },
       fields: [
-        { name: 'cadet', label: 'צוער', type: 'static' },
+        { name: 'cadet', label: task.trackId ? 'קצינות' : 'צוער', type: 'static' },
         { name: 'title', label: 'כותרת', required: true },
         { name: 'description', label: 'תיאור', type: 'textarea', rows: 3 },
         [
@@ -143,10 +165,15 @@ window.App = window.App || {};
     var cadetSelect = container.querySelector('#f-cadet');
     /* רשימת הצוערים לסינון מצומצמת לסוג שנבחר בכותרת, כדי לא להציע מי שממילא מוסתר. */
     var selectable = store.cadets({ type: type });
-    fillSelect(cadetSelect, [{ value: '', label: 'כל הצוערים' }].concat(selectable.map(function (cadet) {
-      return { value: cadet.id, label: cadet.name };
-    })), filters.cadetId);
-    if (filters.cadetId && !util.byId(selectable, filters.cadetId)) {
+    fillSelect(cadetSelect, [{ value: '', label: 'כל הצוערים והקצינויות' }]
+      .concat(store.tracks().map(function (track) {
+        return { value: 'track:' + track.id, label: 'קצינות ' + track.name };
+      }))
+      .concat(selectable.map(function (cadet) {
+        return { value: cadet.id, label: cadet.name };
+      })), filters.cadetId);
+    if (filters.cadetId && filters.cadetId.indexOf('track:') !== 0 &&
+        !util.byId(selectable, filters.cadetId)) {
       filters.cadetId = '';
       cadetSelect.value = '';
     }
@@ -197,9 +224,12 @@ window.App = window.App || {};
   }
 
   function renderList(container, type) {
+    var isTrackFilter = filters.cadetId.indexOf('track:') === 0;
     var query = {
       type: type,
-      cadetId: filters.cadetId,
+      cadetId: isTrackFilter ? '' : filters.cadetId,
+      includeTrack: !isTrackFilter && !!filters.cadetId,
+      trackId: isTrackFilter ? filters.cadetId.slice(6) : '',
       priority: filters.priority,
       category: filters.category,
       from: filters.from,

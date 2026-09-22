@@ -9,6 +9,8 @@
     { pattern: /^#\/cadets$/, name: 'cadets', render: function (c, ctx) { App.screens.cadets.render(c, ctx); } },
     { pattern: /^#\/cadet\/(.+)$/, name: 'cadets', keys: ['id'],
       render: function (c, ctx) { App.screens.cadets.renderDetail(c, ctx); } },
+    { pattern: /^#\/track\/(.+)$/, name: 'cadets', keys: ['id'],
+      render: function (c, ctx) { App.screens.tracks.renderDetail(c, ctx); } },
     { pattern: /^#\/tasks$/, name: 'tasks', render: function (c, ctx) { App.screens.tasks.render(c, ctx); } },
     { pattern: /^#\/meetings$/, name: 'meetings', render: function (c, ctx) { App.screens.meetings.render(c, ctx); } },
     { pattern: /^#\/group\/(.+)$/, name: 'meetings', keys: ['id'],
