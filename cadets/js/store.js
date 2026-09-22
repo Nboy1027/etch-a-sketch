@@ -48,6 +48,24 @@ window.App = window.App || {};
     { value: 'concern', label: 'מדאיגה' }
   ];
 
+  /* ערכי רוח צה"ל, בסדר שבו הם מופיעים במסמך. הערה חיובית מזדהה עם ערך;
+     הערה שלילית מתנגשת איתו. */
+  var IDF_VALUES = [
+    'הגנת המדינה, אזרחיה ותושביה',
+    'אהבת המולדת ונאמנות למדינה',
+    'כבוד האדם',
+    'ממלכתיות',
+    'טוהר הנשק',
+    'דבקות במשימה וחתירה לניצחון',
+    'אחריות',
+    'מקצועיות',
+    'משמעת',
+    'אמינות',
+    'רעות',
+    'דוגמה אישית',
+    'שליחות'
+  ];
+
   var TONES = [
     { value: 'positive', label: 'חיובי' },
     { value: 'neutral', label: 'ניטרלי' },
@@ -196,6 +214,13 @@ window.App = window.App || {};
     RECURRING_STATUSES: RECURRING_STATUSES,
     FREQUENCIES: FREQUENCIES,
     MARK_STATUSES: MARK_STATUSES,
+    IDF_VALUES: IDF_VALUES,
+    /* רשימת הערכים לבחירה בטופס, עם אפשרות לא לבחור כלל. */
+    valueOptions: function () {
+      return [{ value: '', label: 'ללא ערך' }].concat(IDF_VALUES.map(function (name) {
+        return { value: name, label: name };
+      }));
+    },
 
     init: load,
     /* קריאה מחדש מהאחסון — לסנכרון כשלשונית אחרת של המערכת שמרה נתונים. */
@@ -619,7 +644,9 @@ window.App = window.App || {};
         events.push({
           date: note.date,
           kind: 'note',
-          title: 'הערה שוטפת',
+          title: note.value
+            ? (note.tone === 'negative' ? 'הערה · מתנגש עם ' : 'הערה · מזדהה עם ') + note.value
+            : 'הערה שוטפת',
           detail: note.text,
           tone: note.tone
         });

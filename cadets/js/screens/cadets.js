@@ -84,15 +84,35 @@ window.App = window.App || {};
       { name: 'tone', label: 'אופי', type: 'select', options: store.TONES }
     ]);
     fields.push({ name: 'text', label: 'ההערה', type: 'textarea', rows: 4, required: true });
+    /* אותה רשימת ערכים, בשתי מסגרות: חיובי מזדהה, שלילי מתנגש.
+       להערה ניטרלית אין ערך לשייך, ולכן השדה אינו מוצג. */
+    fields.push({
+      name: 'valueMatch', label: 'מזדהה עם ערך', type: 'select',
+      options: store.valueOptions(), showWhen: { field: 'tone', value: 'positive' }
+    });
+    fields.push({
+      name: 'valueClash', label: 'מתנגש עם ערך', type: 'select',
+      options: store.valueOptions(), showWhen: { field: 'tone', value: 'negative' }
+    });
 
     ui.openForm({
       title: note ? 'עריכת הערה' : 'הערה שוטפת',
-      values: note || { date: util.today(), tone: 'neutral', cadetId: cadets[0].id },
+      values: note
+        ? Object.assign({}, note, { valueMatch: note.value, valueClash: note.value })
+        : { date: util.today(), tone: 'neutral', cadetId: cadets[0].id },
       fields: fields,
       onSubmit: function (result) {
-        if (note) result.id = note.id;
-        result.cadetId = cadetId || result.cadetId;
-        store.saveNote(result);
+        var saved = {
+          date: result.date,
+          tone: result.tone,
+          text: result.text,
+          /* רק השדה שהוצג בפועל נאסף, ולכן הערך נלקח לפי האופי שנבחר. */
+          value: result.tone === 'positive' ? (result.valueMatch || '')
+            : result.tone === 'negative' ? (result.valueClash || '') : '',
+          cadetId: cadetId || result.cadetId || (note && note.cadetId)
+        };
+        if (note) saved.id = note.id;
+        store.saveNote(saved);
         ui.toast(note ? 'ההערה עודכנה' : 'ההערה נרשמה');
       }
     });
@@ -369,6 +389,14 @@ window.App = window.App || {};
     return host;
   }
 
+  /* "מזדהה עם" או "מתנגש עם", לפי אופי ההערה. */
+  function valueBadge(note) {
+    if (!note.value) return '';
+    var clash = note.tone === 'negative';
+    return '<span class="badge badge--' + (clash ? 'danger' : 'ok') + '">' +
+      (clash ? 'מתנגש עם: ' : 'מזדהה עם: ') + util.escape(note.value) + '</span>';
+  }
+
   function renderNotesTab(body, cadet) {
     var notes = store.notes(cadet.id);
     body.innerHTML =
@@ -392,6 +420,7 @@ window.App = window.App || {};
           '<span class="card__meta">' + util.formatDate(note.date) + '</span>' +
           '<span class="badge badge--' + (toneClass[note.tone] || '') + '">' +
             util.escape(store.label('tone', note.tone)) + '</span>' +
+          valueBadge(note) +
           '<span class="spacer"></span>' +
           '<button type="button" class="btn btn--sm btn--ghost" data-note-edit="' + util.escape(note.id) + '">עריכה</button>' +
           '<button type="button" class="btn btn--sm btn--ghost" data-note-delete="' + util.escape(note.id) + '">מחיקה</button>' +
