@@ -122,8 +122,8 @@ window.App = window.App || {};
             '</div>' +
             '<div class="stat' + (summary.isStale ? ' stat--alert' : '') + '">' +
               '<span class="stat__value">' + util.escape(summary.lastMeeting
-                ? 'פא"ן ' + util.relativeDays(summary.lastMeeting.date)
-                : 'עוד לא נערך פא"ן') + '</span>' +
+                ? 'פ"ע ' + util.relativeDays(summary.lastMeeting.date)
+                : 'עוד לא נערך פ"ע') + '</span>' +
               (summary.lastMeeting ? ui.sentimentBadge(summary.lastMeeting.sentiment) : '') +
             '</div>' +
             '<div class="stat"><span>יעדים פעילים:</span>' +
@@ -181,8 +181,8 @@ window.App = window.App || {};
   function contactRow(record) {
     var text = record.date
       ? (record.role !== 'officer' ? 'נפגשתם '
-        : record.source === 'trackMeeting' ? 'פא"ן ' : 'הציג ') + util.relativeDays(record.date)
-      : (record.role === 'officer' ? 'עוד לא הציג ולא היה בפא"ן' : 'עוד לא נפגשתם');
+        : record.source === 'trackMeeting' ? 'פ"ע ' : 'הציג ') + util.relativeDays(record.date)
+      : (record.role === 'officer' ? 'עוד לא הציג ולא היה בפ"ע' : 'עוד לא נפגשתם');
     return '<div class="stat' + (record.isStale ? ' stat--alert' : '') + '">' +
       '<span class="stat__value">' + util.escape(text) + '</span>' +
       (record.date ? ui.sentimentBadge(record.sentiment) : '') +

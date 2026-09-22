@@ -331,7 +331,7 @@ window.App = window.App || {};
     return !!(entry.presented || entry.strengths || entry.improvements || entry.followups || entry.freeText);
   }
 
-  /* ===== פא"ן קצינות =====
+  /* ===== פ"ע קצינות =====
      פגישה עם קצינות אחת: תבנית משותפת לקבוצה, ומתחתיה שורה אישית לכל חבר.
      הקבוצה קטנה, ולכן הכול על מסך אחד בלי ניווט בין משתתפים. */
 
@@ -459,7 +459,7 @@ window.App = window.App || {};
     if (App.speech) App.speech.decorate(content);
 
     ui.openModal({
-      title: (existing ? 'עריכת פא"ן · ' : 'פא"ן חדש · ') + track.name,
+      title: (existing ? 'עריכת פ"ע · ' : 'פ"ע חדש · ') + track.name,
       content: content,
       wide: true,
       onClose: commit,
@@ -470,7 +470,7 @@ window.App = window.App || {};
           modal.close();
           activeTab = 'track';
           App.render();
-          ui.toast('הפא"ן נשמר');
+          ui.toast('הפ"ע נשמר');
         }
       }]
     });
@@ -515,12 +515,12 @@ window.App = window.App || {};
     });
     container.querySelectorAll('[data-tm-delete]').forEach(function (button) {
       button.addEventListener('click', function () {
-        ui.confirm({ title: 'מחיקת פא"ן', message: 'למחוק את תיעוד הפגישה?',
+        ui.confirm({ title: 'מחיקת פ"ע', message: 'למחוק את תיעוד הפגישה?',
           confirmLabel: 'מחיקה', danger: true })
           .then(function (confirmed) {
             if (!confirmed) return;
             store.deleteTrackMeeting(button.dataset.tmDelete);
-            ui.toast('הפא"ן נמחק');
+            ui.toast('הפ"ע נמחק');
           });
       });
     });
@@ -535,7 +535,7 @@ window.App = window.App || {};
         '<div class="btn-row">' +
           '<button type="button" class="btn" id="new-meeting">פגישה אישית</button>' +
           '<button type="button" class="btn btn--primary" id="new-group">מפגש קצינות</button>' +
-          '<button type="button" class="btn btn--primary" id="new-track-meeting">פא"ן</button>' +
+          '<button type="button" class="btn btn--primary" id="new-track-meeting">פ"ע</button>' +
         '</div>' +
       '</div>' +
       '<div class="tabs">' +
@@ -544,7 +544,7 @@ window.App = window.App || {};
         '<button type="button" class="tab' + (activeTab === 'group' ? ' is-active' : '') +
           '" data-mtab="group">מפגשי קצינות</button>' +
         '<button type="button" class="tab' + (activeTab === 'track' ? ' is-active' : '') +
-          '" data-mtab="track">פא"ן קצינויות</button>' +
+          '" data-mtab="track">פ"ע קצינויות</button>' +
       '</div>' +
       '<div id="meetings-body"></div>';
 
@@ -564,7 +564,7 @@ window.App = window.App || {};
     else renderGroupList(body);
   }
 
-  /* פא"ן תמיד שייך לקצינות אחת, ולכן בוחרים אותה לפני שנפתח העורך. */
+  /* פ"ע תמיד שייך לקצינות אחת, ולכן בוחרים אותה לפני שנפתח העורך. */
   function chooseTrack() {
     var tracks = store.tracks({ activeOnly: true });
     if (!tracks.length) {
@@ -576,7 +576,7 @@ window.App = window.App || {};
       return;
     }
     ui.openForm({
-      title: 'פא"ן חדש',
+      title: 'פ"ע חדש',
       submitLabel: 'המשך',
       values: { trackId: tracks[0].id },
       fields: [{
@@ -592,9 +592,9 @@ window.App = window.App || {};
     body.innerHTML = '<div class="stack" id="tm-list"></div>';
     var list = body.querySelector('#tm-list');
     if (!meetings.length) {
-      list.appendChild(ui.emptyState('אין פא"נים',
-        'פא"ן הוא פגישה עם קצינות אחת: תוכן משותף לקבוצה, ובתוכו שורה אישית לכל חבר.',
-        'פא"ן חדש', chooseTrack));
+      list.appendChild(ui.emptyState('אין פגישות עבודה',
+        'פ"ע הוא פגישה עם קצינות אחת: תוכן משותף לקבוצה, ובתוכו שורה אישית לכל חבר.',
+        'פ"ע חדש', chooseTrack));
       return;
     }
     list.innerHTML = meetings.map(trackMeetingCard).join('');

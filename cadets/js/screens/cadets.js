@@ -210,9 +210,9 @@ window.App = window.App || {};
     var contactLines = store.contacts(cadet).map(function (record) {
       var text = record.date
         ? (record.role !== 'officer' ? 'פגישה אחרונה: '
-          : record.source === 'trackMeeting' ? 'פא"ן אחרון: ' : 'הצגה אחרונה: ') +
+          : record.source === 'trackMeeting' ? 'פ"ע אחרון: ' : 'הצגה אחרונה: ') +
           util.formatDate(record.date) + ' · ' + util.relativeDays(record.date)
-        : (record.role === 'officer' ? 'עוד לא הציג ולא היה בפא"ן' : 'עוד לא נערכה פגישה אישית');
+        : (record.role === 'officer' ? 'עוד לא הציג ולא היה בפ"ע' : 'עוד לא נערכה פגישה אישית');
       return '<div class="sub' + (record.isStale ? ' due--overdue' : '') + '">' +
         util.escape(text) + '</div>';
     }).join('');
@@ -358,23 +358,23 @@ window.App = window.App || {};
     }
   }
 
-  /* מה שנכתב עליו אישית בפא"נים של הקצינות שלו. */
+  /* מה שנכתב עליו אישית בפגישות עבודה של הקצינות שלו. */
   function trackMeetingSection(cadet) {
     var entries = store.trackNotesFor(cadet.id);
-    var host = sectionHost('track-meetings', 'פא"ן ' + store.trackName(cadet.trackId), 'פא"ן חדש', function () {
+    var host = sectionHost('track-meetings', 'פ"ע ' + store.trackName(cadet.trackId), 'פ"ע חדש', function () {
       App.screens.meetings.openTrackMeetingEditor(null, cadet.trackId);
     });
 
     if (!entries.length) {
-      host.list.appendChild(ui.emptyState('עוד לא נכתב עליו בפא"ן',
-        'פא"ן הוא פגישה עם הקצינות כולה, ובתוכה שורה אישית לכל חבר.'));
+      host.list.appendChild(ui.emptyState('עוד לא נכתב עליו בפ"ע',
+        'פ"ע הוא פגישה עם הקצינות כולה, ובתוכה שורה אישית לכל חבר.'));
       return host;
     }
     host.list.innerHTML = entries.map(function (entry) {
       return '<div class="card">' +
         '<div class="row">' +
           '<span class="card__title">' + util.formatDate(entry.date) + '</span>' +
-          '<span class="badge badge--officer">פא"ן</span>' +
+          '<span class="badge badge--officer">פ"ע</span>' +
           ui.sentimentBadge(entry.sentiment) +
           '<span class="spacer"></span>' +
           '<a class="btn btn--sm btn--ghost" href="#/track/' + util.escape(entry.trackId) + '">לקצינות</a>' +

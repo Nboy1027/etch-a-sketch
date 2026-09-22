@@ -504,7 +504,7 @@ window.App = window.App || {};
       return util.sortBy(result, function (e) { return e.date; }, 'desc');
     },
 
-    /* ===== פא"ן קצינות =====
+    /* ===== פ"ע קצינות =====
        פגישה עם קצינות אחת: תוכן משותף לקבוצה, ובתוכו שורה אישית לכל חבר. */
     trackMeetings: function (trackId) {
       return util.sortBy(data.trackMeetings.filter(function (meeting) {
@@ -528,7 +528,7 @@ window.App = window.App || {};
       data.trackMeetings = data.trackMeetings.filter(function (m) { return m.id !== id; });
       emit();
     },
-    /* השורות האישיות שנכתבו על צוער מסוים בפא"ן, לאורך הזמן. */
+    /* השורות האישיות שנכתבו על צוער מסוים בפ"ע, לאורך הזמן. */
     trackNotesFor: function (cadetId) {
       var result = [];
       data.trackMeetings.forEach(function (meeting) {
@@ -704,7 +704,7 @@ window.App = window.App || {};
         var source;
         if (role === 'officer') {
           /* בעולם הקצינות נחשבים שני סוגי המפגשים — ההצגה במפגש הגדול
-             והשורה האישית בפא"ן. הקובע הוא המאוחר מביניהם. */
+             והשורה האישית בפ"ע. הקובע הוא המאוחר מביניהם. */
           var officerRecords = store.presentationsFor(cadet.id).map(function (r) {
             return Object.assign({}, r, { source: 'presentation' });
           }).concat(store.trackNotesFor(cadet.id).map(function (r) {
@@ -794,7 +794,7 @@ window.App = window.App || {};
         events.push({
           date: entry.date,
           kind: 'trackMeeting',
-          title: 'פא"ן ' + store.trackName(entry.trackId),
+          title: 'פ"ע ' + store.trackName(entry.trackId),
           detail: entry.text || '',
           sentiment: entry.sentiment
         });

@@ -1,4 +1,4 @@
-/* קצינויות: הצוותים בעולם הקצינות. לכל קצינות חברים, פגישות פא"ן,
+/* קצינויות: הצוותים בעולם הקצינות. לכל קצינות חברים, פגישות פ"ע,
    משימות משותפות ויעדים משותפים. */
 window.App = window.App || {};
 
@@ -12,7 +12,7 @@ window.App = window.App || {};
   var TABS = [
     { key: 'members', label: 'חברים' },
     { key: 'tasks', label: 'משימות' },
-    { key: 'meetings', label: 'פא"ן' },
+    { key: 'meetings', label: 'פ"ע' },
     { key: 'goals', label: 'יעדים' }
   ];
 
@@ -90,7 +90,7 @@ window.App = window.App || {};
   }
 
   function lastMeetingText(summary) {
-    return summary.lastMeeting ? 'פא"ן ' + util.relativeDays(summary.lastMeeting.date) : 'עוד לא נערך פא"ן';
+    return summary.lastMeeting ? 'פ"ע ' + util.relativeDays(summary.lastMeeting.date) : 'עוד לא נערך פ"ע';
   }
 
   /* ===== כרטיס הקצינות ===== */
@@ -180,7 +180,7 @@ window.App = window.App || {};
     body.querySelector('#delete-track').addEventListener('click', function () {
       ui.confirm({
         title: 'מחיקת קצינות',
-        message: 'ימחקו גם הפא"נים, המשימות והיעדים של הקצינות. ' +
+        message: 'ימחקו גם פגישות העבודה, המשימות והיעדים של הקצינות. ' +
           'הצוערים עצמם יישארו במערכת עם כל ההיסטוריה האישית שלהם, ללא שיוך לקצינות.',
         confirmLabel: 'מחיקה', danger: true
       }).then(function (confirmed) {
@@ -223,7 +223,7 @@ window.App = window.App || {};
     var meetings = store.trackMeetings(track.id);
     body.innerHTML =
       '<div class="btn-row" style="margin-bottom:14px">' +
-        '<button type="button" class="btn btn--primary btn--sm" id="add-meeting">פא"ן חדש</button>' +
+        '<button type="button" class="btn btn--primary btn--sm" id="add-meeting">פ"ע חדש</button>' +
       '</div>' +
       '<div class="stack" id="meeting-list"></div>';
 
@@ -233,8 +233,8 @@ window.App = window.App || {};
 
     var list = body.querySelector('#meeting-list');
     if (!meetings.length) {
-      list.appendChild(ui.emptyState('עוד לא נערך פא"ן',
-        'פא"ן הוא פגישה עם הקצינות הזו: תוכן משותף לקבוצה, ובתוכו שורה אישית לכל חבר.'));
+      list.appendChild(ui.emptyState('עוד לא נערך פ"ע',
+        'פ"ע הוא פגישה עם הקצינות הזו: תוכן משותף לקבוצה, ובתוכו שורה אישית לכל חבר.'));
       return;
     }
     list.innerHTML = meetings.map(App.screens.meetings.trackMeetingCard).join('');
