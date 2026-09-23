@@ -13,6 +13,15 @@ window.App = window.App || {};
   var DEVICE_KEY = 'cadets-management-device';
   var SCHEMA_VERSION = 1;
 
+  /* הקצינויות שהמשתמש מוביל. נזרעות פעם אחת בלבד, ומשם הן ניתנות
+     לעריכה, להוספה ולמחיקה כמו כל קצינות אחרת. */
+  var SEED_TRACKS = [
+    'סיורים',
+    'חיבור מבצעי למב"א ואקטואליה',
+    'בטיחות והווי / צמ"צ',
+    'מחשוב ואמצעים'
+  ];
+
   /* ספי ההתרעה מהאפיון. מרוכזים כאן כדי שיהיה מקום אחד לשנות בו. */
   var THRESHOLDS = {
     dueSoonDays: 7,      /* משימה "מתקרבת" */
@@ -184,6 +193,17 @@ window.App = window.App || {};
       storageAvailable = false;
       data = blankData();
     }
+    /* הדגל נשמר בנתונים, ולכן מחיקת קצינות לא מחזירה אותה בטעינה הבאה,
+       וגם ייבוא גיבוי לא יזרע אותן מחדש. */
+    if (!data.settings.tracksSeeded && !data.tracks.length) {
+      SEED_TRACKS.forEach(function (name) {
+        data.tracks.push({ id: util.uid(), name: name, description: '', active: true,
+          createdAt: util.now() });
+      });
+      data.settings.tracksSeeded = true;
+      migrated = true;
+    }
+
     /* כותבים את הצורה החדשה חזרה מיד, כך שגיבוי שייוצא אחר כך כבר יהיה מומר. */
     if (migrated) {
       migrated = false;
