@@ -159,7 +159,8 @@ window.App = window.App || {};
       '<div class="cadet-card__head">' +
         '<div>' +
           '<div class="cadet-card__name">' + util.escape(cadet.name) + '</div>' +
-          (cadet.unit ? '<div class="cadet-card__unit">' + util.escape(cadet.unit) + '</div>' : '') +
+          (cadet.trackId
+            ? '<div class="cadet-card__unit">' + util.escape(store.trackName(cadet.trackId)) + '</div>' : '') +
         '</div>' +
         ui.roleBadges(cadet) +
       '</div>' +

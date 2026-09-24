@@ -28,14 +28,11 @@ window.App = window.App || {};
       values: cadet || { roles: ['personal'], active: 'true' },
       fields: [
         { name: 'name', label: 'שם מלא', required: true },
-        [
-          {
-            name: 'roles', label: 'סוג צוער', type: 'checkgroup', required: true,
-            options: store.CADET_ROLES,
-            hint: 'אפשר לסמן את שניהם — צוער שהוא גם חניך אישי וגם חניך קצינותי.'
-          },
-          { name: 'unit', label: 'כיתה / צוות' }
-        ],
+        {
+          name: 'roles', label: 'סוג צוער', type: 'checkgroup', required: true,
+          options: store.CADET_ROLES,
+          hint: 'אפשר לסמן את שניהם — צוער שהוא גם חניך אישי וגם חניך קצינותי.'
+        },
         {
           name: 'trackId', label: 'קצינות', type: 'select',
           options: [{ value: '', label: 'ללא שיוך' }].concat(store.tracks({ activeOnly: true }).map(function (track) {
@@ -182,7 +179,8 @@ window.App = window.App || {};
           '<div>' +
             '<div class="cadet-card__name">' + util.escape(cadet.name) +
               (cadet.active === false ? ' <span class="badge">לא פעיל</span>' : '') + '</div>' +
-            (cadet.unit ? '<div class="cadet-card__unit">' + util.escape(cadet.unit) + '</div>' : '') +
+            (cadet.trackId
+              ? '<div class="cadet-card__unit">' + util.escape(store.trackName(cadet.trackId)) + '</div>' : '') +
           '</div>' +
           ui.roleBadges(cadet) +
         '</div>' +
@@ -259,7 +257,6 @@ window.App = window.App || {};
   function renderDetails(body, cadet) {
     var rows = [
       ['סוג צוער', store.rolesLabel(cadet)],
-      ['כיתה / צוות', cadet.unit],
       ['קצינות', cadet.trackId ? store.trackName(cadet.trackId) : ''],
       ['סטטוס', cadet.active === false ? 'לא פעיל' : 'פעיל']
     ].filter(function (row) { return row[1]; });

@@ -326,11 +326,11 @@ window.App = window.App || {};
 
     if (kind === 'cadets') {
       filename = 'cadets';
-      headers = ['שם', 'סוג', 'כיתה/צוות', 'קצינות', 'סטטוס',
+      headers = ['שם', 'סוג', 'קצינות', 'סטטוס',
                  'משימות פתוחות', 'תיעוד אחרון', 'נקודות לשימור', 'נקודות לשיפור', 'רקע'];
       rows = store.cadets().map(function (cadet) {
         var summary = store.cadetSummary(cadet);
-        return [cadet.name, store.rolesLabel(cadet), cadet.unit || '',
+        return [cadet.name, store.rolesLabel(cadet),
           cadet.trackId ? store.trackName(cadet.trackId) : '',
           cadet.active === false ? 'לא פעיל' : 'פעיל', summary.openTasks,
           summary.contacts.map(function (record) {
