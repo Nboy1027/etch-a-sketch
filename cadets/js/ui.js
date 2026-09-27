@@ -395,6 +395,117 @@ window.App = window.App || {};
     });
   }
 
+  /* מקטע תמונות לעורך פגישה. onChange מקבל את רשימת המזהים המעודכנת,
+     כדי שהשמירה האוטומטית של העורך תרים אותה כמו כל שינוי אחר. */
+  function photoSection(ids, onChange) {
+    var current = (ids || []).slice();
+    var host = document.createElement('div');
+    host.className = 'field';
+    host.dataset.photos = 'yes';
+    host.innerHTML =
+      '<label>תמונות</label>' +
+      '<div class="photo-grid"></div>' +
+      '<div class="btn-row">' +
+        '<button type="button" class="btn btn--sm" data-add>הוספת תמונה</button>' +
+      '</div>' +
+      '<input type="file" accept="image/*" multiple hidden data-input>' +
+      '<div class="field__hint">התמונות נדחסות לפני השמירה ונכללות בגיבוי.</div>';
+
+    var grid = host.querySelector('.photo-grid');
+    var input = host.querySelector('[data-input]');
+
+    if (!App.photos || !App.photos.isSupported()) {
+      host.innerHTML = '<label>תמונות</label>' +
+        '<div class="field__hint">הדפדפן הזה אינו תומך בשמירת תמונות.</div>';
+      return host;
+    }
+
+    function render() {
+      grid.innerHTML = current.map(function (id) {
+        return '<div class="photo" data-id="' + util.escape(id) + '">' +
+          '<img alt="תמונה מהפגישה">' +
+          '<button type="button" class="photo__remove" aria-label="הסרת התמונה">&times;</button>' +
+        '</div>';
+      }).join('');
+
+      current.forEach(function (id) {
+        var cell = grid.querySelector('[data-id="' + id + '"]');
+        if (!cell) return;
+        App.photos.get(id).then(function (dataUrl) {
+          if (dataUrl) cell.querySelector('img').src = dataUrl;
+          else cell.remove();
+        });
+        cell.querySelector('img').addEventListener('click', function () {
+          App.photos.get(id).then(function (dataUrl) {
+            if (dataUrl) openModal({ title: 'תמונה', wide: true,
+              content: '<img src="' + dataUrl + '" alt="תמונה מהפגישה" style="width:100%;border-radius:8px">' });
+          });
+        });
+        cell.querySelector('.photo__remove').addEventListener('click', function () {
+          confirm({ title: 'הסרת תמונה', message: 'להסיר את התמונה מהפגישה?',
+            confirmLabel: 'הסרה', danger: true }).then(function (confirmed) {
+            if (!confirmed) return;
+            current = current.filter(function (other) { return other !== id; });
+            App.photos.remove(id);
+            render();
+            onChange(current.slice());
+          });
+        });
+      });
+    }
+
+    host.querySelector('[data-add]').addEventListener('click', function () { input.click(); });
+    input.addEventListener('change', function () {
+      var files = Array.prototype.slice.call(input.files || []);
+      input.value = '';
+      if (!files.length) return;
+      files.reduce(function (chain, file) {
+        return chain.then(function () {
+          return App.photos.add(file).then(function (id) { current.push(id); });
+        });
+      }, Promise.resolve()).then(function () {
+        render();
+        onChange(current.slice());
+        toast(files.length === 1 ? 'התמונה נוספה' : files.length + ' תמונות נוספו');
+      }).catch(function (err) {
+        render();
+        onChange(current.slice());
+        toast(err && err.message ? err.message : 'הוספת התמונה נכשלה');
+      });
+    });
+
+    render();
+    return host;
+  }
+
+  /* תצוגת התמונות בכרטיס פגישה, לקריאה בלבד. */
+  function photoStrip(ids) {
+    if (!ids || !ids.length || !App.photos) return '';
+    return '<div class="photo-grid" data-strip="' + util.escape(ids.join(',')) + '"></div>';
+  }
+
+  function bindPhotoStrips(container) {
+    if (!App.photos || !App.photos.isSupported()) return;
+    container.querySelectorAll('[data-strip]').forEach(function (grid) {
+      if (grid.dataset.bound) return;
+      grid.dataset.bound = 'yes';
+      grid.dataset.strip.split(',').filter(Boolean).forEach(function (id) {
+        var cell = document.createElement('div');
+        cell.className = 'photo';
+        cell.innerHTML = '<img alt="תמונה מהפגישה">';
+        grid.appendChild(cell);
+        App.photos.get(id).then(function (dataUrl) {
+          if (!dataUrl) { cell.remove(); return; }
+          cell.querySelector('img').src = dataUrl;
+          cell.addEventListener('click', function () {
+            openModal({ title: 'תמונה', wide: true,
+              content: '<img src="' + dataUrl + '" alt="תמונה מהפגישה" style="width:100%;border-radius:8px">' });
+          });
+        });
+      });
+    });
+  }
+
   function emptyState(title, message, actionLabel, onAction) {
     var node = document.createElement('div');
     node.className = 'empty';
@@ -422,6 +533,9 @@ window.App = window.App || {};
     dueLabel: dueLabel,
     taskRow: taskRow,
     bindTaskRows: bindTaskRows,
+    photoSection: photoSection,
+    photoStrip: photoStrip,
+    bindPhotoStrips: bindPhotoStrips,
     emptyState: emptyState
   };
 })(window.App);

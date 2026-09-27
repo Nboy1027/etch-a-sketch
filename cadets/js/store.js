@@ -150,6 +150,10 @@ window.App = window.App || {};
     });
     base.trackMeetings.forEach(function (meeting) {
       if (!Array.isArray(meeting.entries)) meeting.entries = [];
+      if (!Array.isArray(meeting.photos)) meeting.photos = [];
+    });
+    base.groupMeetings.forEach(function (meeting) {
+      if (!Array.isArray(meeting.photos)) meeting.photos = [];
     });
     /* הערה החזיקה ערך יחיד ב-value; עכשיו היא מחזיקה רשימה ב-values. */
     base.notes.forEach(function (note) {
@@ -861,6 +865,34 @@ window.App = window.App || {};
 
     /* ===== גיבוי ===== */
     exportJSON: function () { return JSON.stringify(data, null, 2); },
+
+    /* מזהי כל התמונות שפגישה כלשהי עדיין מפנה אליהן. */
+    usedPhotoIds: function () {
+      var ids = [];
+      data.trackMeetings.concat(data.groupMeetings).forEach(function (meeting) {
+        (meeting.photos || []).forEach(function (id) { ids.push(id); });
+      });
+      return ids;
+    },
+
+    /* גיבוי מלא כולל התמונות, כדי שייבוא במכשיר אחר ישחזר גם אותן. */
+    exportBundle: function () {
+      var source = App.photos ? App.photos.exportAll(store.usedPhotoIds()) : Promise.resolve({});
+      return source.then(function (photos) {
+        var payload = JSON.parse(JSON.stringify(data));
+        payload.photos = photos;
+        return JSON.stringify(payload, null, 2);
+      });
+    },
+
+    importBundle: function (text) {
+      var parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== 'object') throw new Error('הקובץ אינו קובץ גיבוי תקין');
+      var photos = parsed.photos || {};
+      delete parsed.photos;
+      var restore = App.photos ? App.photos.replaceAll(photos) : Promise.resolve();
+      return restore.then(function () { store.importJSON(JSON.stringify(parsed)); });
+    },
     importJSON: function (text) {
       var parsed = JSON.parse(text);
       if (!parsed || typeof parsed !== 'object') throw new Error('הקובץ אינו קובץ גיבוי תקין');

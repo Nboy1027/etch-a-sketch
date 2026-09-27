@@ -239,6 +239,7 @@ window.App = window.App || {};
     }
     list.innerHTML = meetings.map(App.screens.meetings.trackMeetingCard).join('');
     App.screens.meetings.bindTrackMeetingCards(list);
+    ui.bindPhotoStrips(list);
   }
 
   function renderGoals(body, track) {

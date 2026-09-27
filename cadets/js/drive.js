@@ -175,8 +175,9 @@ window.App = window.App || {};
 
   function upload() {
     var name = backupName();
-    var content = store.exportJSON();
-    return folderId().then(function (parent) {
+    return Promise.all([store.exportBundle(), folderId()]).then(function (parts) {
+      var content = parts[0];
+      var parent = parts[1];
       var boundary = 'cadets-' + util.uid();
       var body =
         '--' + boundary + '\r\n' +

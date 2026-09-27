@@ -124,9 +124,11 @@ window.App = window.App || {};
         '</div>' +
       '</section>';
 
-    container.querySelector('#export-json').addEventListener('click', function () {
-      util.downloadFile(App.drive.localBackupName(), store.exportJSON(), 'application/json');
-      ui.toast('קובץ הגיבוי הורד');
+    container.querySelector('#export-json').addEventListener('click', function (event) {
+      run(event.currentTarget, 'מכין...', store.exportBundle().then(function (text) {
+        util.downloadFile(App.drive.localBackupName(), text, 'application/json');
+        ui.toast('קובץ הגיבוי הורד');
+      }));
     });
 
     var fileInput = container.querySelector('#import-file');
@@ -144,16 +146,16 @@ window.App = window.App || {};
         }).then(function (confirmed) {
           fileInput.value = '';
           if (!confirmed) return;
-          try {
-            store.importJSON(String(reader.result));
-            ui.toast('הגיבוי יובא בהצלחה');
-          } catch (err) {
-            ui.openModal({
-              title: 'הייבוא נכשל',
-              content: '<p>' + util.escape(err.message || 'הקובץ אינו תקין') + '</p>',
-              buttons: [{ label: 'סגירה', className: 'btn--primary', onClick: function (m) { m.close(); } }]
+          Promise.resolve()
+            .then(function () { return store.importBundle(String(reader.result)); })
+            .then(function () { ui.toast('הגיבוי יובא בהצלחה'); })
+            .catch(function (err) {
+              ui.openModal({
+                title: 'הייבוא נכשל',
+                content: '<p>' + util.escape(err.message || 'הקובץ אינו תקין') + '</p>',
+                buttons: [{ label: 'סגירה', className: 'btn--primary', onClick: function (m) { m.close(); } }]
+              });
             });
-          }
         });
       };
       reader.readAsText(file);
@@ -250,7 +252,8 @@ window.App = window.App || {};
         }).then(function (confirmed) {
           if (!confirmed) return;
           return drive.download(file.id).then(function (text) {
-            store.importJSON(text);
+            return store.importBundle(text);
+          }).then(function () {
             ui.toast('יובא מהדרייב: ' + file.name);
           });
         });

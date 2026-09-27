@@ -39,6 +39,7 @@ js/store.js         שכבת הנתונים: CRUD, נגזרות (ספי התרע
 js/ui.js            מודאל, בונה טפסים, אישורים ורכיבי תצוגה חוזרים
 js/app.js           ניתוב לפי hash ומסנן סוג הצוער הגלובלי
 js/speech.js        הכתבה קולית בעברית לשדות טקסט
+js/photos.js        תמונות פגישה: דחיסה ואחסון ב-IndexedDB
 js/screens/         מסך לכל קובץ: home, cadets, tasks, meetings, goals, settings
 ```
 

@@ -346,3 +346,20 @@ code.ltr { display: inline-block; }
 @media (prefers-reduced-motion: reduce) {
   .mic-btn.is-recording { animation: none; }
 }
+
+/* ===== Meeting photos ===== */
+.photo-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.photo { position: relative; width: 84px; height: 84px; flex: 0 0 auto; }
+.photo img {
+  width: 100%; height: 100%; object-fit: cover;
+  border-radius: 8px; border: 1px solid var(--border-strong);
+  background: var(--surface-2); cursor: pointer; display: block;
+}
+.photo__remove {
+  position: absolute; top: -6px; inset-inline-end: -6px;
+  width: 22px; height: 22px; padding: 0; line-height: 1;
+  border: 1px solid var(--border-strong); border-radius: 50%;
+  background: var(--surface); color: var(--danger);
+  font-size: 15px; cursor: pointer;
+}
+.photo__remove:hover { background: var(--danger-soft); }

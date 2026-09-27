@@ -78,6 +78,11 @@
       render();
     });
 
+    /* תמונות שהפגישה שלהן נמחקה אינן משרתות איש ותופסות מקום. */
+    if (App.photos && App.photos.isSupported()) {
+      App.photos.prune(store.usedPhotoIds()).catch(function () { /* ניקיון בלבד */ });
+    }
+
     if (!location.hash) location.hash = '#/home';
     renderTypeFilter();
     render();

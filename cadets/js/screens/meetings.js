@@ -202,6 +202,13 @@ window.App = window.App || {};
     var status = content.querySelector('#gm-status');
     var current = participants.length ? participants[0].id : null;
 
+    if (!Array.isArray(draft.photos)) draft.photos = [];
+    var summaryField = content.querySelector('#gm-summary').closest('.field');
+    summaryField.insertAdjacentElement('afterend', ui.photoSection(draft.photos, function (ids) {
+      draft.photos = ids;
+      scheduleSave();
+    }));
+
     content.querySelector('#gm-date').addEventListener('input', function (event) {
       draft.date = event.target.value;
       scheduleSave();
@@ -414,6 +421,13 @@ window.App = window.App || {};
       });
     });
 
+    if (!Array.isArray(draft.photos)) draft.photos = [];
+    var followupField = content.querySelector('#tm-followups').closest('.field');
+    followupField.insertAdjacentElement('afterend', ui.photoSection(draft.photos, function (ids) {
+      draft.photos = ids;
+      scheduleSave();
+    }));
+
     var host = content.querySelector('#tm-members');
     if (!members.length) {
       host.innerHTML = '<p class="hint">אין חברים פעילים בקצינות הזו. ' +
@@ -493,6 +507,7 @@ window.App = window.App || {};
           util.escape(meeting.id) + '">מחיקה</button>' +
       '</div>' +
       templateBlocks(meeting) +
+      ui.photoStrip(meeting.photos) +
       present.filter(function (entry) { return entry.text; }).map(function (entry) {
         return '<div style="margin-top:8px"><div class="card__meta">' +
           '<a href="#/cadet/' + util.escape(entry.cadetId) + '">' +
@@ -599,6 +614,7 @@ window.App = window.App || {};
     }
     list.innerHTML = meetings.map(trackMeetingCard).join('');
     bindTrackMeetingCards(list);
+    ui.bindPhotoStrips(list);
   }
 
   function renderPersonal(body, context) {
@@ -677,6 +693,9 @@ window.App = window.App || {};
           '<button type="button" class="btn btn--sm btn--ghost" data-gm-delete="' + util.escape(meeting.id) + '">מחיקה</button>' +
         '</div>' +
         (meeting.summary ? '<div class="task__desc">' + util.escapeMultiline(meeting.summary) + '</div>' : '') +
+        ((meeting.photos || []).length
+          ? '<div class="card__meta" style="margin-top:6px">' +
+            util.plural(meeting.photos.length, 'תמונה אחת', 'תמונות') + '</div>' : '') +
       '</div>';
     }).join('');
 
@@ -727,9 +746,10 @@ window.App = window.App || {};
           '<button type="button" class="btn" data-gm-edit="' + util.escape(meeting.id) + '">עריכה</button>' +
         '</div>' +
       '</div>' +
-      (meeting.summary
+      (meeting.summary || (meeting.photos || []).length
         ? '<div class="card" style="margin-bottom:16px"><div class="card__meta">סיכום כללי למפגש</div>' +
-          '<div>' + util.escapeMultiline(meeting.summary) + '</div></div>'
+          (meeting.summary ? '<div>' + util.escapeMultiline(meeting.summary) + '</div>' : '') +
+          ui.photoStrip(meeting.photos) + '</div>'
         : '') +
       (absent.length
         ? '<div class="card" style="margin-bottom:16px"><div class="card__meta">נעדרו</div><div>' +
@@ -748,6 +768,7 @@ window.App = window.App || {};
       }).join('') + '</div>';
 
     bindGroupActions(container);
+    ui.bindPhotoStrips(container);
   }
 
   function fill(select, options, value) {

@@ -413,6 +413,7 @@ window.App = window.App || {};
       return App.screens.meetings.meetingCard(meeting);
     }).join('');
     App.screens.meetings.bindMeetingCards(host.list);
+    ui.bindPhotoStrips(host.list);
     return host;
   }
 
