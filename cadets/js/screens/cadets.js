@@ -88,18 +88,20 @@ window.App = window.App || {};
     /* אותה רשימת ערכים, בשתי מסגרות: חיובי מזדהה, שלילי מתנגש.
        להערה ניטרלית אין ערך לשייך, ולכן השדה אינו מוצג. */
     fields.push({
-      name: 'valueMatch', label: 'מזדהה עם ערך', type: 'select',
-      options: store.valueOptions(), showWhen: { field: 'tone', value: 'positive' }
+      name: 'valueMatch', label: 'מזדהה עם הערכים', type: 'checkgroup',
+      options: store.valueOptions(), showWhen: { field: 'tone', value: 'positive' },
+      hint: 'אפשר לסמן כמה ערכים, ואפשר להשאיר ריק.'
     });
     fields.push({
-      name: 'valueClash', label: 'מתנגש עם ערך', type: 'select',
-      options: store.valueOptions(), showWhen: { field: 'tone', value: 'negative' }
+      name: 'valueClash', label: 'מתנגש עם הערכים', type: 'checkgroup',
+      options: store.valueOptions(), showWhen: { field: 'tone', value: 'negative' },
+      hint: 'אפשר לסמן כמה ערכים, ואפשר להשאיר ריק.'
     });
 
     ui.openForm({
       title: note ? 'עריכת הערה' : 'הערה שוטפת',
       values: note
-        ? Object.assign({}, note, { valueMatch: note.value, valueClash: note.value })
+        ? Object.assign({}, note, { valueMatch: note.values || [], valueClash: note.values || [] })
         : { date: util.today(), tone: 'neutral', cadetId: cadets[0].id },
       fields: fields,
       onSubmit: function (result) {
@@ -107,9 +109,9 @@ window.App = window.App || {};
           date: result.date,
           tone: result.tone,
           text: result.text,
-          /* רק השדה שהוצג בפועל נאסף, ולכן הערך נלקח לפי האופי שנבחר. */
-          value: result.tone === 'positive' ? (result.valueMatch || '')
-            : result.tone === 'negative' ? (result.valueClash || '') : '',
+          /* רק השדה שהוצג בפועל נאסף, ולכן הערכים נלקחים לפי האופי שנבחר. */
+          values: result.tone === 'positive' ? (result.valueMatch || [])
+            : result.tone === 'negative' ? (result.valueClash || []) : [],
           cadetId: cadetId || result.cadetId || (note && note.cadetId)
         };
         if (note) saved.id = note.id;
@@ -450,12 +452,16 @@ window.App = window.App || {};
     return host;
   }
 
-  /* "מזדהה עם" או "מתנגש עם", לפי אופי ההערה. */
+  /* "מזדהה עם" או "מתנגש עם", לפי אופי ההערה, ותגית לכל ערך שסומן. */
   function valueBadge(note) {
-    if (!note.value) return '';
+    var values = note.values || [];
+    if (!values.length) return '';
     var clash = note.tone === 'negative';
-    return '<span class="badge badge--' + (clash ? 'danger' : 'ok') + '">' +
-      (clash ? 'מתנגש עם: ' : 'מזדהה עם: ') + util.escape(note.value) + '</span>';
+    return '<span class="hint">' + (clash ? 'מתנגש עם:' : 'מזדהה עם:') + '</span>' +
+      values.map(function (value) {
+        return '<span class="badge badge--' + (clash ? 'danger' : 'ok') + '">' +
+          util.escape(value) + '</span>';
+      }).join('');
   }
 
   function renderNotesTab(body, cadet) {

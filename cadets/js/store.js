@@ -132,6 +132,9 @@ window.App = window.App || {};
 
   /* משלים שדות חסרים כדי שקובץ ישן או חלקי לא יפיל את המערכת. */
   function normalize(raw) {
+    /* מתאפס פעם אחת בראש הפונקציה: כל בלוק המרה שמדליק אותו חייב לשרוד
+       עד הכתיבה חזרה לאחסון בסוף load. */
+    migrated = false;
     var base = blankData();
     if (!raw || typeof raw !== 'object') return base;
     ['tracks', 'cadets', 'tasks', 'meetings', 'groupMeetings', 'trackMeetings',
@@ -148,12 +151,18 @@ window.App = window.App || {};
     base.trackMeetings.forEach(function (meeting) {
       if (!Array.isArray(meeting.entries)) meeting.entries = [];
     });
+    /* הערה החזיקה ערך יחיד ב-value; עכשיו היא מחזיקה רשימה ב-values. */
+    base.notes.forEach(function (note) {
+      if (note.value === undefined && Array.isArray(note.values)) return;
+      note.values = note.value ? [note.value] : (Array.isArray(note.values) ? note.values : []);
+      delete note.value;
+      migrated = true;
+    });
     base.goals.forEach(function (goal) {
       if (!goal.kind) goal.kind = 'once';
       if (!goal.marks || typeof goal.marks !== 'object') goal.marks = {};
     });
     /* גיבויים מהגרסה הראשונה שמרו סוג יחיד ב-type. ממירים אותו לרשימת תפקידים. */
-    migrated = false;
     base.cadets.forEach(function (cadet) {
       if (cadet.type === undefined && Array.isArray(cadet.roles) && cadet.roles.length) return;
       if (!Array.isArray(cadet.roles) || !cadet.roles.length) {
@@ -241,11 +250,9 @@ window.App = window.App || {};
     FREQUENCIES: FREQUENCIES,
     MARK_STATUSES: MARK_STATUSES,
     IDF_VALUES: IDF_VALUES,
-    /* רשימת הערכים לבחירה בטופס, עם אפשרות לא לבחור כלל. */
+    /* רשימת הערכים לסימון בטופס. אפשר לסמן כמה, ואפשר לא לסמן כלל. */
     valueOptions: function () {
-      return [{ value: '', label: 'ללא ערך' }].concat(IDF_VALUES.map(function (name) {
-        return { value: name, label: name };
-      }));
+      return IDF_VALUES.map(function (name) { return { value: name, label: name }; });
     },
 
     init: load,
@@ -832,8 +839,9 @@ window.App = window.App || {};
         events.push({
           date: note.date,
           kind: 'note',
-          title: note.value
-            ? (note.tone === 'negative' ? 'הערה · מתנגש עם ' : 'הערה · מזדהה עם ') + note.value
+          title: (note.values || []).length
+            ? (note.tone === 'negative' ? 'הערה · מתנגש עם ' : 'הערה · מזדהה עם ') +
+              note.values.join(', ')
             : 'הערה שוטפת',
           detail: note.text,
           tone: note.tone
